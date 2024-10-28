@@ -1,6 +1,6 @@
 {
-  "id": "img-webp-optimizer-plugin",
-  "name": "Image WebP Optimizer for Obsidian",
+  "id": "img-webp-optimizer",
+  "name": "Image WebP Optimizer",
   "version": "1.0.1",
   "minAppVersion": "0.15.0",
   "description": "Automatically converts clipboard images to WebP format upon pasting.",
