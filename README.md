@@ -46,6 +46,8 @@ This plugin is compatible with the latest version of Obsidian. It requires a bro
 
 If you encounter any issues or have suggestions for improvements, please open an issue on the GitHub repository.
 
+https://buymeacoffee.com/albrtontheislnd
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
