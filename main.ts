@@ -15,7 +15,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 
 		// This adds an editor command that can perform some operation on the current editor instance
 		this.addCommand({
-			id: 'webp-plugin-paste-command',
+			id: 'paste-command',
 			name: 'Embed clipboard image as WEBP format',
 			editorCallback: (editor: Editor, view: MarkdownView) => {
 				this.handleClipboardImage(editor, view).then(() => {
