@@ -1,11 +1,11 @@
 {
   "id": "img-webp-optimizer",
   "name": "Image WebP Optimizer",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "minAppVersion": "0.15.0",
   "description": "Automatically converts clipboard images to WebP format upon pasting.",
   "author": "Do Quang Tu",
   "authorUrl": "https://www.doquangtu.com",
   "fundingUrl": "https://buymeacoffee.com/albrtontheislnd",
-  "isDesktopOnly": false
+  "isDesktopOnly": true
 }
