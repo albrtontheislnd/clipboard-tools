@@ -1,6 +1,7 @@
 import { App, Editor, FileSystemAdapter, MarkdownView, Menu, Notice, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
 import { tUtils } from './utils';
 import { DEFAULT_SETTINGS, ImgOptimizerPluginSettingsTab } from './settings';
+import { ImageFileObject, ImgOptimizerPluginSettings } from './interfaces';
 
 export default class ImgWebpOptimizerPlugin extends Plugin {
 	settings: ImgOptimizerPluginSettings;

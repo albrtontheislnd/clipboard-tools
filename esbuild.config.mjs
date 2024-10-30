@@ -33,13 +33,12 @@ const context = await esbuild.context({
 		"@lezer/lr",
 		...builtins],
 	format: "cjs",
-	target: "es2020",
+	target: "es2018",
 	logLevel: "info",
 	sourcemap: prod ? false : "inline",
 	treeShaking: true,
 	outfile: "main.js",
 	minify: prod,
-	platform: 'node',
 	loader: {
 		'.wasm': 'dataurl',          // Encode WASM file as a data URL (Base64)
 	  },

@@ -1,5 +1,6 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import ImgWebpOptimizerPlugin from "./main";
+import { ImgOptimizerPluginSettings } from "./interfaces";
 
 export const DEFAULT_SETTINGS: Partial<ImgOptimizerPluginSettings> = {
 	imageFormat: 'webp',

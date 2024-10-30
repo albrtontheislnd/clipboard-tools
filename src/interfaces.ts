@@ -1,11 +1,11 @@
 
-interface ImgOptimizerPluginSettings {
+export interface ImgOptimizerPluginSettings {
 	imageFormat: string; // webp | avif | png
 	compressionLevel: number,
 	binExec: string,
 } 
 
-interface ImageFileObject {
+export interface ImageFileObject {
 	mimeType: string;
 	fileExtension: string;
 	buffer: ArrayBuffer | null;
