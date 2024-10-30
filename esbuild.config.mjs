@@ -15,7 +15,7 @@ const context = await esbuild.context({
 	banner: {
 		js: banner,
 	},
-	entryPoints: ["main.ts"],
+	entryPoints: ["src/main.ts"],
 	bundle: true,
 	external: [
 		"obsidian",
@@ -33,12 +33,16 @@ const context = await esbuild.context({
 		"@lezer/lr",
 		...builtins],
 	format: "cjs",
-	target: "es2018",
+	target: "es2020",
 	logLevel: "info",
 	sourcemap: prod ? false : "inline",
 	treeShaking: true,
 	outfile: "main.js",
 	minify: prod,
+	platform: 'node',
+	loader: {
+		'.wasm': 'dataurl',          // Encode WASM file as a data URL (Base64)
+	  },
 });
 
 if (prod) {

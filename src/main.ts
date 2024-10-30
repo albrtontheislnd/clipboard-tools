@@ -1,35 +1,11 @@
 import { App, Editor, FileSystemAdapter, MarkdownView, Menu, Notice, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
-import { exec } from "child_process";
-import { promises as fs } from "fs";
-
-interface ImgOptimizerPluginSettings {
-	imageFormat: string; // webp | avif | png
-	compressionLevel: number,
-	binExec: string,
-  } 
-
-interface ImageFileObject {
-	mimeType: string;
-	fileExtension: string;
-	buffer: ArrayBuffer | null;
-	randomFilename: string;
-	hasTFile ?: any;
-}
-
-const DEFAULT_SETTINGS: Partial<ImgOptimizerPluginSettings> = {
-	imageFormat: 'webp',
-	compressionLevel: 90,
-	binExec: '',
-  };
-
-const ConfigValues = {
-	validFormats: ["webp", "png", "avif"],
-}
-
-
+import { tUtils } from './utils';
+import { DEFAULT_SETTINGS, ImgOptimizerPluginSettingsTab } from './settings';
 
 export default class ImgWebpOptimizerPlugin extends Plugin {
 	settings: ImgOptimizerPluginSettings;
+
+	locked: boolean = false;
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
@@ -48,7 +24,11 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			id: 'paste-optimized-img',
 			name: 'Embed clipboard image as WEBP/AVIF/PNG format',
 			editorCallback: (editor: Editor, view: MarkdownView) => {
-				this.handleClipboardImage(editor, view).then(() => {});
+				if(this.locked) {
+					new Notice(`Image Conversion in Progress: Please hold on for a moment.`);
+				} else {
+					this.handleClipboardImage(editor, view).then(() => {});
+				}
 			}
 		});
 
@@ -57,7 +37,11 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 				const editor = view?.editor;
 				if(view && editor) {
-					this.handleClipboardImage(editor, view).then(() => {});
+					if(this.locked) {
+						new Notice(`Image Conversion in Progress: Please hold on for a moment.`);
+					} else {
+						this.handleClipboardImage(editor, view).then(() => {});
+					}				
 				}
 			} catch (error) {
 				return;	
@@ -160,7 +144,11 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		const tempAVIF_absolutePath = adapter.getFullPath(tempAVIF_normalizedPath);
 
 		// 3, convert using commandline tools
-		const execResult = await ImgWebpOptimizerUtils.convertImage(tempPNG_absolutePath, tempAVIF_absolutePath, this.settings.binExec);
+		const execResult = await tUtils.convertImage(
+			this.settings.binExec,
+			tempPNG_absolutePath, 
+			tempAVIF_absolutePath, 
+			this.settings.compressionLevel);
 
 		// 4, check
 		const _file = this.app.vault.getFileByPath(tempAVIF_normalizedPath);
@@ -215,6 +203,8 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
         const clipboardItems = await navigator.clipboard.read();
         if (!clipboardItems) return;
 
+		this.locked = true;
+
         for (const item of clipboardItems) {
 			if (!item.types.includes("image/png")) {
 				continue;
@@ -240,126 +230,8 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 				new Notice(`Image saved as ${file.name}`);
 			}
         }
+
+		this.locked = false;
     }	
-
-}
-
-export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
-	plugin: ImgWebpOptimizerPlugin;
-  
-	/**
-	 * Creates an instance of the ImgOptimizerPluginSettingsTab class.
-	 * @param app - The Obsidian app instance.
-	 * @param plugin - The ImgWebpOptimizerPlugin instance.
-	 */
-	constructor(app: App, plugin: ImgWebpOptimizerPlugin) {
-	  super(app, plugin);
-	  this.plugin = plugin;
-	}
-  
-	/**
-	 * @description
-	 * This method is called when the user navigates to the plugin's settings tab.
-	 * It should create the settings elements and populate the containerEl with them.
-	 * 
-	 * @method display
-	 */
-	display(): void {
-	  let { containerEl } = this;
-  
-	  containerEl.empty();
-  
-		new Setting(containerEl)
-		.setName('Image format')
-		.setDesc('Default image format (accepts WEBP, AVIF, and PNG)')
-		.addText((text) =>
-			text
-			.setPlaceholder('WEBP')
-			.setValue(this.plugin.settings.imageFormat)
-			.onChange(async (value) => {
-				// validation
-				this.plugin.settings.imageFormat = ConfigValues.validFormats.includes(value.toLowerCase()) ? value.toLowerCase() : "webp";
-				await this.plugin.saveSettings();
-			})
-		);
-
-		new Setting(containerEl)
-		.setName('Compression Level')
-		.setDesc('A Number between 0 and 100 indicating the image quality')
-		.addText((text) =>
-			text
-			.setPlaceholder('90')
-			.setValue(String(this.plugin.settings.compressionLevel))
-			.onChange(async (value) => {
-				// validation
-				const compressionLevel = Math.min(100, Math.max(1, parseInt(value, 10))) || 90;
-				this.plugin.settings.compressionLevel = Number(compressionLevel);
-				await this.plugin.saveSettings();
-			})
-		);
-
-		new Setting(containerEl)
-		.setName('Absolute executable path to ImageMagick (only for AVIF)')
-		.setDesc('Example: /opt/homebrew/bin/magick')
-		.addText((text) =>
-			text
-			.setPlaceholder('magick')
-			.setValue(String(this.plugin.settings.binExec))
-			.onChange(async (value) => {
-				// validation
-				this.plugin.settings.binExec = value.trim();
-				await this.plugin.saveSettings();
-			})
-		);
-
-	}
-  }
-
-class ImgWebpOptimizerUtils {
-	static getUnixTimestamp(): number {
-		return Math.floor(Date.now() / 1000);
-	  }
-
-	static async convertImage(inputFilePath: string, outputFilePath: string, conversionProgram: string): Promise<boolean> {
-		const command = `${conversionProgram} "${inputFilePath}" "${outputFilePath}"`;
-		console.log(command);
-	  
-		// Wrap exec in a promise to wait for completion
-		const execPromise = (cmd: string): Promise<{ stdout: string; stderr: string }> =>
-		  new Promise((resolve, reject) => {
-			exec(cmd, (error, stdout, stderr) => {
-			  if (error) {
-				reject(error);
-				return;
-			  }
-			  resolve({ stdout, stderr });
-			});
-		  });
-	  
-		try {
-		  // Run the conversion command
-		  const { stdout, stderr } = await execPromise(command);
-	  
-		  if (stdout) {
-			console.log("ImageMagick output:", stdout);
-		  }
-
-		  if (stderr) {
-			console.error("ImageMagick error:", stderr);
-		  }
-	  
-		  // Check if the output file exists
-		  try {
-			await fs.access(outputFilePath);
-			return true;
-		  } catch {
-			throw new Error(`Output file not found: ${outputFilePath}`);
-		  }
-		} catch (error) {
-		  console.error("ImageMagick execution error:", error);
-		  return false;
-		}
-	  };
-
 
 }
