@@ -5,7 +5,6 @@ import { ImageFileObject, ImgOptimizerPluginSettings } from './interfaces';
 
 export default class ImgWebpOptimizerPlugin extends Plugin {
 	settings: ImgOptimizerPluginSettings;
-
 	locked: boolean = false;
 
 	async loadSettings() {
@@ -33,7 +32,8 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			}
 		});
 
-		this.addRibbonIcon('image-plus', 'Embed clipboard image as WEBP/AVIF/PNG format', () => {
+		this.addRibbonIcon('image-plus', 'Embed clipboard image in WEBP/AVIF/PNG/JPEG format', () => {
+
 			try {
 				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 				const editor = view?.editor;
@@ -48,8 +48,6 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 				return;	
 			}
 		  });
-
-
 	}
 
 	onunload() {
@@ -73,6 +71,15 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		return `PastedImage_${ISODateTime}_${randomString}${fileExtension}`;
 	}
 
+/**
+ * Converts a given image blob to WEBP format.
+ * In case of an error during conversion, it defaults to PNG format.
+ * 
+ * @param {Blob} blob - The image blob to be converted.
+ * @returns {Promise<ImageFileObject | null>} - A promise that resolves to an ImageFileObject containing
+ * the converted image buffer, mime-type, file extension, and a randomly generated filename.
+ * If conversion fails, the image is returned in PNG format.
+ */
 	async ProcessWEBP(blob: Blob): Promise<ImageFileObject | null> {
 		const quality = this.settings.compressionLevel / 100;
 
@@ -109,6 +116,48 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		return file;
 	}
 
+	async ProcessJPEG(blob: Blob): Promise<ImageFileObject | null> {
+		const quality = this.settings.compressionLevel / 100;
+
+		const file: ImageFileObject = {
+			mimeType: 'image/jpeg',
+			fileExtension: 'jpeg',
+			buffer: null,
+			randomFilename: '',
+		};
+
+		try {
+			// Create an OffscreenCanvas
+			const imgBitmap = await createImageBitmap(blob);
+			const offscreenCanvas = new OffscreenCanvas(imgBitmap.width, imgBitmap.height);
+			const ctx = offscreenCanvas.getContext("2d");
+			ctx?.drawImage(imgBitmap, 0, 0);
+			
+			const imgBlob = await new Promise<Blob>((resolve) => {
+				offscreenCanvas.convertToBlob({ type: file.mimeType, quality: quality }).then(resolve);
+				});
+
+			file.buffer = await imgBlob.arrayBuffer();
+		} catch (error) {
+			// encoding error!
+			// return as PNG
+			file.mimeType = 'image/png';
+			file.fileExtension = 'png';
+			file.buffer = await blob.arrayBuffer();
+			console.error(`ProcessWEBP() error: ${error}`);
+		}
+
+		// generate random filename
+		file.randomFilename = this.randomFilename(file.fileExtension);
+		return file;
+	}
+
+	/**
+	 * Process a given blob by simply returning it as a PNG buffer.
+	 * @param {Blob} blob - The blob to process.
+	 * @returns {Promise<ImageFileObject | null>} - A promise that resolves to an ImageFileObject containing
+	 * the original image buffer, mime-type, file extension, and a randomly generated filename.
+	 */
 	async ProcessPNG(blob: Blob): Promise<ImageFileObject | null> {
 		const file: ImageFileObject = {
 			mimeType: 'image/png',
@@ -124,6 +173,13 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		return file;
 	}
 
+	/**
+	 * Process a given blob by converting it to an AVIF buffer using the `convertImage` helper function.
+	 * @param {Blob} blob - The blob to process.
+	 * @returns {Promise<ImageFileObject | null>} - A promise that resolves to an ImageFileObject containing
+	 * the converted image buffer, mime-type, file extension, and a randomly generated filename.
+	 * If the conversion fails, the original image buffer is returned, encoded as PNG.
+	 */
 	async ProcessAVIF(blob: Blob): Promise<ImageFileObject | null> {
 		const file: ImageFileObject = {
 			mimeType: 'image/avif',
@@ -192,6 +248,11 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			return file;
 		}
 
+		if(this.settings.imageFormat === 'jpeg') {
+			const file = await this.ProcessJPEG(blob);
+			return file;
+		}
+
 		return null;
     }
 
@@ -210,6 +271,8 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			if (!item.types.includes("image/png")) {
 				continue;
 			}
+
+			new Notice(`Processing clipboard image...`);
 
 			const blob = await item.getType("image/png");
 			const fileObject = await this.convertTo(blob);

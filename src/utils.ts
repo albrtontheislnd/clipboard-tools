@@ -1,5 +1,6 @@
 import { exec, execFile } from "child_process";
 import { promises as fs } from "fs";
+import * as path from "path";
 
 function execFilePromise(command: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
 	return new Promise((resolve, reject) => {
@@ -13,27 +14,10 @@ function execFilePromise(command: string, args: string[]): Promise<{ stdout: str
 	});
 }
 
-function execPromise(cmd: string): Promise<{ stdout: string; stderr: string }> {
-	return new Promise((resolve, reject) => {
-		exec(cmd, (error, stdout, stderr) => {
-		if (error) {
-			reject(`Error: ${error.message}\nStderr: ${stderr}`);
-			return;
-		}
-		resolve({ stdout, stderr });
-		});
-	});
-}
-
 function escapeFilePath(filePath: string): string {
-	if (process.platform === 'win32') {
-	  // For Windows: escape backslashes and wrap in quotes
-	  return `"${filePath.replace(/(["\s'$`\\])/g, '\\$1')}"`;
-	} else {
-	  // For Unix-like OSes:
-	  return `'${filePath.replace(/'/g, `'\\''`)}'`;
-	}
-  }
+	// Escape any special shell characters and wrap in quotes
+	return `"${filePath.replace(/(["\s'$`\\])/g, (c) => ({ '"': '\\"', '\\': '\\\\', '$': '\\$', '`': '\\`', "'": "\\'" }[c] || `\\${c}`))}"`;
+}
 
 export class tUtils {
 	static getUnixTimestamp(): number {
@@ -68,108 +52,81 @@ export class tUtils {
 		result: boolean,
 	}> {
 
-		const checkFfmpeg = await tUtils.isFfmpegPath(progPath);
-		const checkImageMagick = await tUtils.isImageMagickPath(progPath);
-		
-		if(checkFfmpeg && !checkImageMagick) {
-			// ffmpeg
-			const avifQuality = tUtils.mapQualityToAvif(quality);
-			const args = [
-				'-i', inputFilePath,             // Input file path
-				'-c:v', 'libaom-av1',        // AVIF codec
-				'-crf', avifQuality.toString(),  // Quality setting (Constant Rate Factor for AVIF)
-				'-y',                        // Overwrite output if it exists
-				outputFilePath                   // Output file path
-			  ];
-			console.log(args);
+		const appCheck = await tUtils.findProgPath(progPath);
+		const app = path.basename(String(appCheck), process.platform === 'win32' ? '.exe' : '').toLowerCase();
+		let args;
 
+		switch (app) {
+			case 'ffmpeg':
+				const avifQuality = tUtils.mapQualityToAvif(quality);
+				args = [
+					'-i', inputFilePath,             // Input file path
+					'-c:v', 'libaom-av1',        // AVIF codec
+					'-crf', avifQuality.toString(),  // Quality setting (Constant Rate Factor for AVIF)
+					'-pix_fmt', 'yuv420p',			// Sets 4:2:0 chroma subsampling, which is compatible with most browsers
+					'-y',                        // Overwrite output if it exists
+					outputFilePath                   // Output file path
+				  ];
+				console.log(args);
+
+				break;
+
+			case 'magick':
+				args = [inputFilePath, '-quality', `${quality}`, outputFilePath];
+				console.log(args);
+				
+				break;
+
+			case 'vips':
+				// vips copy input.png output.avif[Q=80]
+				args = [
+					'copy',
+					inputFilePath,
+					`${outputFilePath}[Q=${quality.toString()}]`];
+				console.log(args);
+				break;
+
+			default:
+				// not a valid app
+				return { stdout: '', stderr: '', result: false };
+				break;
+		}
+
+		try {
+			const { stdout, stderr } = await execFilePromise(progPath, args);
 			try {
-				const { stdout, stderr } = await execFilePromise(progPath, args);
-				try {
-					await fs.access(outputFilePath);
-				  } catch {
-					throw new Error(`Output file not found: ${outputFilePath}`);
-				  }
+				await fs.access(outputFilePath, fs.constants.R_OK);
+				// checking: not a zero-bytes file
+				const outputSize = (await fs.stat(outputFilePath)).size;
+				if(outputSize === 0) {
+					await fs.unlink(outputFilePath);
+					throw new Error(`Zero-bytes file.`);
+				}
+			  } catch(error) {
+				throw new Error(error);
+			  }
 
-				return {
-					stdout: stdout,
-					stderr: stderr,
-					result: true,
-				};
-			} catch (error) {
-				console.error("ffmpeg execution error:", error);
-			}
-		} else if(checkImageMagick && !checkFfmpeg) {
-			// ImageMagick
-			const args = [inputFilePath, '-quality', `${quality}`, outputFilePath];
-			console.log(args);
-
-			try {
-				const { stdout, stderr } = await execFilePromise(progPath, args);
-				try {
-					await fs.access(outputFilePath);
-				  } catch {
-					throw new Error(`Output file not found: ${outputFilePath}`);
-				  }
-
-				return {
-					stdout: stdout,
-					stderr: stderr,
-					result: true,
-				};
-			} catch (error) {
-				console.error("ImageMagick execution error:", error);
-			}
-		} else {
 			return {
-				stdout: '',
-				stderr: '',
-				result: false,
+				stdout: stdout,
+				stderr: stderr,
+				result: true,
 			};
-		}
-
-		return {
-			stdout: '',
-			stderr: '',
-			result: false,
-		};
-	  }
-
-	static async isFfmpegPath(filePath: string): Promise<boolean> {
-		const isWindows = process.platform === 'win32';
-		const executable = isWindows ? 'ffmpeg.exe' : 'ffmpeg';
-
-		if(!filePath.endsWith(executable)) return false;
-
-		// Windows specific check (needs .exe)
-		if (isWindows) {
-			return fs.access(filePath, fs.constants.F_OK)
-				.then(() => true)
-				.catch(() => false);
-		} else {
-			// Unix-like systems
-			return fs.access(filePath, fs.constants.F_OK | fs.constants.X_OK)
-				.then(() => true)
-				.catch(() => false);
+		} catch (error) {
+			console.error(`${app.toUpperCase()} execution error:`, error);
+			return { stdout: '', stderr: '', result: false };
 		}
 	}
 
-	static async isImageMagickPath(filePath: string): Promise<boolean> {
-		const isWindows = process.platform === 'win32';
-		const executable = isWindows ? 'magick.exe' : 'magick';
-
-		if(!filePath.endsWith(executable)) return false;
-
-		// Windows specific check (needs .exe)
-		if (isWindows) {
-			return fs.access(filePath, fs.constants.F_OK)
-				.then(() => true)
-				.catch(() => false);
-		} else {
-			// Unix-like systems
-			return fs.access(filePath, fs.constants.F_OK | fs.constants.X_OK)
-				.then(() => true)
-				.catch(() => false);
+	static async findProgPath(filePath: string): Promise<string | null> {
+		const execFile = path.basename(filePath, process.platform === 'win32' ? '.exe' : '').toLowerCase();
+		if (['magick', 'ffmpeg', 'vips'].includes(execFile)) {
+			try {
+				await fs.access(filePath, fs.constants.X_OK);
+				return filePath;
+			} catch {
+				return null;
+			}
 		}
+		return null;
 	}
-}
+ }
