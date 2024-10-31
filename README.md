@@ -2,6 +2,9 @@
 
 ## Overview
 
+Supports WEBP, PNG, and JPEG using native encoding capabilities (Offscreen Canvas).
+Supports AVIF by calling external ffmpeg/ImageMagick/libvips binaries.
+
 Image WebP Optimizer is a plugin for Obsidian that automatically converts pasted images to the WebP format. This plugin enhances your note-taking experience by providing efficient storage and faster loading times for images without compromising on quality.
 
 ## Features
