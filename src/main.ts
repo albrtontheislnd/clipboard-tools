@@ -24,28 +24,18 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			id: 'paste-optimized-img',
 			name: 'Embed clipboard image as WEBP/AVIF/PNG format',
 			editorCallback: (editor: Editor, view: MarkdownView) => {
-				if(this.locked) {
-					new Notice(`Image Conversion in Progress: Please hold on for a moment.`);
-				} else {
-					this.handleClipboardImage(editor, view).then(() => {});
-				}
+				this.handleClipboardImage(editor, view).then(() => {});
 			}
 		});
 
 		this.addRibbonIcon('image-plus', 'Embed clipboard image in WEBP/AVIF/PNG/JPEG format', () => {
-
 			try {
 				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-				const editor = view?.editor;
-				if(view && editor) {
-					if(this.locked) {
-						new Notice(`Image Conversion in Progress: Please hold on for a moment.`);
-					} else {
-						this.handleClipboardImage(editor, view).then(() => {});
-					}				
+				if(view?.editor) {
+					this.handleClipboardImage(view.editor, view).then(() => {});
 				}
-			} catch (error) {
-				return;	
+			} catch {
+				return;
 			}
 		  });
 	}
@@ -61,7 +51,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	 */
 	randomFilename(fileExtension: string = ''): string {
 		// PastedImage_{randomString}_{ISODateTime}
-		const randomString = crypto.getRandomValues(new Uint32Array(1))[0].toString(36).slice(-5);
+		const randomString = Math.random().toString(36).slice(-5);
 		const ISODateTime = new Date().toISOString().replace(/[:.-]/g, '');
 		
 		// fileExtension?
@@ -71,108 +61,52 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		return `PastedImage_${ISODateTime}_${randomString}${fileExtension}`;
 	}
 
-/**
- * Converts a given image blob to WEBP format.
- * In case of an error during conversion, it defaults to PNG format.
- * 
- * @param {Blob} blob - The image blob to be converted.
- * @returns {Promise<ImageFileObject | null>} - A promise that resolves to an ImageFileObject containing
- * the converted image buffer, mime-type, file extension, and a randomly generated filename.
- * If conversion fails, the image is returned in PNG format.
- */
-	async ProcessWEBP(blob: Blob): Promise<ImageFileObject | null> {
-		const quality = this.settings.compressionLevel / 100;
-
-		const file: ImageFileObject = {
-			mimeType: 'image/webp',
-			fileExtension: 'webp',
-			buffer: null,
-			randomFilename: '',
-		};
-
-		try {
-			// Create an OffscreenCanvas
-			const imgBitmap = await createImageBitmap(blob);
-			const offscreenCanvas = new OffscreenCanvas(imgBitmap.width, imgBitmap.height);
-			const ctx = offscreenCanvas.getContext("2d");
-			ctx?.drawImage(imgBitmap, 0, 0);
-			
-			const imgBlob = await new Promise<Blob>((resolve) => {
-				offscreenCanvas.convertToBlob({ type: file.mimeType, quality: quality }).then(resolve);
-				});
-
-			file.buffer = await imgBlob.arrayBuffer();
-		} catch (error) {
-			// encoding error!
-			// return as PNG
-			file.mimeType = 'image/png';
-			file.fileExtension = 'png';
-			file.buffer = await blob.arrayBuffer();
-			console.error(`ProcessWEBP() error: ${error}`);
-		}
-
-		// generate random filename
-		file.randomFilename = this.randomFilename(file.fileExtension);
-		return file;
-	}
-
-	async ProcessJPEG(blob: Blob): Promise<ImageFileObject | null> {
-		const quality = this.settings.compressionLevel / 100;
-
-		const file: ImageFileObject = {
-			mimeType: 'image/jpeg',
-			fileExtension: 'jpeg',
-			buffer: null,
-			randomFilename: '',
-		};
-
-		try {
-			// Create an OffscreenCanvas
-			const imgBitmap = await createImageBitmap(blob);
-			const offscreenCanvas = new OffscreenCanvas(imgBitmap.width, imgBitmap.height);
-			const ctx = offscreenCanvas.getContext("2d");
-			ctx?.drawImage(imgBitmap, 0, 0);
-			
-			const imgBlob = await new Promise<Blob>((resolve) => {
-				offscreenCanvas.convertToBlob({ type: file.mimeType, quality: quality }).then(resolve);
-				});
-
-			file.buffer = await imgBlob.arrayBuffer();
-		} catch (error) {
-			// encoding error!
-			// return as PNG
-			file.mimeType = 'image/png';
-			file.fileExtension = 'png';
-			file.buffer = await blob.arrayBuffer();
-			console.error(`ProcessWEBP() error: ${error}`);
-		}
-
-		// generate random filename
-		file.randomFilename = this.randomFilename(file.fileExtension);
-		return file;
-	}
-
 	/**
-	 * Process a given blob by simply returning it as a PNG buffer.
-	 * @param {Blob} blob - The blob to process.
+	 * Process a given blob by converting it to the specified format (WEBP, JPEG, or PNG)
+	 * @param {Blob} blob - The blob to process
+	 * @param {string} format - The target format ('webp', 'jpeg', or 'png')
 	 * @returns {Promise<ImageFileObject | null>} - A promise that resolves to an ImageFileObject containing
-	 * the original image buffer, mime-type, file extension, and a randomly generated filename.
+	 * the converted image buffer, mime-type, file extension, and a randomly generated filename
 	 */
-	async ProcessPNG(blob: Blob): Promise<ImageFileObject | null> {
+	async ProcessImage(blob: Blob, format: 'webp' | 'jpeg' | 'png'): Promise<ImageFileObject | null> {
 		const file: ImageFileObject = {
-			mimeType: 'image/png',
-			fileExtension: 'png',
+			mimeType: `image/${format}`,
+			fileExtension: format,
 			buffer: null,
 			randomFilename: '',
 		};
 
-		file.buffer = await blob.arrayBuffer();
+		if (format === 'png') {
+			file.buffer = await blob.arrayBuffer();
+		} else {
+			const quality = this.settings.compressionLevel / 100;
+			
+			try {
+				// Create an OffscreenCanvas
+				const imgBitmap = await createImageBitmap(blob);
+				const offscreenCanvas = new OffscreenCanvas(imgBitmap.width, imgBitmap.height);
+				const ctx = offscreenCanvas.getContext("2d");
+				ctx?.drawImage(imgBitmap, 0, 0);
+				
+				const imgBlob = await new Promise<Blob>((resolve) => {
+					offscreenCanvas.convertToBlob({ type: file.mimeType, quality: quality }).then(resolve);
+				});
+
+				file.buffer = await imgBlob.arrayBuffer();
+			} catch (error) {
+				// encoding error!
+				// return as PNG
+				file.mimeType = 'image/png';
+				file.fileExtension = 'png';
+				file.buffer = await blob.arrayBuffer();
+				console.error(`ProcessImage() error: ${error}`);
+			}
+		}
 
 		// generate random filename
 		file.randomFilename = this.randomFilename(file.fileExtension);
 		return file;
 	}
-
 	/**
 	 * Process a given blob by converting it to an AVIF buffer using the `convertImage` helper function.
 	 * @param {Blob} blob - The blob to process.
@@ -232,28 +166,13 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	 * @returns {Promise<ImageFileObject | null>} - A promise that resolves to an object with the converted buffer, mime-type, file extension, and a random filename.
 	 */
     async convertTo(blob: Blob): Promise<ImageFileObject | null> {
-
-		if(this.settings.imageFormat === 'webp') {
-			const file = await this.ProcessWEBP(blob);
-			return file;
+		switch (this.settings.imageFormat) {
+			case 'webp': return this.ProcessImage(blob, 'webp');
+			case 'png': return this.ProcessImage(blob, 'png');
+			case 'avif': return this.ProcessAVIF(blob);
+			case 'jpeg': return this.ProcessImage(blob, 'jpeg');
+			default: return null;
 		}
-
-		if(this.settings.imageFormat === 'png') {
-			const file = await this.ProcessPNG(blob);
-			return file;
-		}
-
-		if(this.settings.imageFormat === 'avif') {
-			const file = await this.ProcessAVIF(blob);
-			return file;
-		}
-
-		if(this.settings.imageFormat === 'jpeg') {
-			const file = await this.ProcessJPEG(blob);
-			return file;
-		}
-
-		return null;
     }
 
     /**
@@ -262,39 +181,41 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
      * @param view - The markdown view for the current markdown file.
      */
     async handleClipboardImage(editor: Editor, view: MarkdownView) {
+
+		if(this.locked) {
+			new Notice(`Image Conversion in Progress: Please hold on for a moment.`);
+			return;
+		}
+
         const clipboardItems = await navigator.clipboard.read();
         if (!clipboardItems) return;
 
-		this.locked = true;
+		const promises = clipboardItems
+			.filter(item => item.types.includes("image/png"))
+			.map(async (item) => {
+				const blob = await item.getType("image/png");
+				const fileObject = await this.convertTo(blob);
 
-        for (const item of clipboardItems) {
-			if (!item.types.includes("image/png")) {
-				continue;
-			}
+				if (fileObject !== null) {
+					let file: TFile;
 
-			new Notice(`Processing clipboard image...`);
+					if(fileObject?.hasTFile instanceof TFile) {
+						file = <TFile> fileObject.hasTFile;
+					} else {
+						const filePath = await this.app.fileManager.getAvailablePathForAttachment(fileObject.randomFilename);
+						file = await this.app.vault.createBinary(filePath, <ArrayBuffer> fileObject.buffer);
+					}
 
-			const blob = await item.getType("image/png");
-			const fileObject = await this.convertTo(blob);
-
-			if (fileObject !== null) {
-				let file: TFile;
-
-				if(fileObject?.hasTFile instanceof TFile) {
-					file = <TFile> fileObject.hasTFile;
-				} else {
-					const filePath = await this.app.fileManager.getAvailablePathForAttachment(fileObject.randomFilename);
-					file = await this.app.vault.createBinary(filePath, <ArrayBuffer> fileObject.buffer);
+					// Embed the image in the current markdown file
+					const embedMarkdown = `![[${file.path}]]`;
+					editor.replaceSelection(embedMarkdown);
+					
+					new Notice(`Image saved as ${file.name}`);
 				}
+			});
 
-				// Embed the image in the current markdown file
-				const embedMarkdown = `![[${file.path}]]`;
-				editor.replaceSelection(embedMarkdown);
-				
-				new Notice(`Image saved as ${file.name}`);
-			}
-        }
-
+		this.locked = true;
+		await Promise.all(promises);
 		this.locked = false;
     }	
 
