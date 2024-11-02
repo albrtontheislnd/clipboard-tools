@@ -1,7 +1,10 @@
 import { App, Editor, FileSystemAdapter, MarkdownView, Menu, Notice, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
 import { tUtils } from './utils';
-import { DEFAULT_SETTINGS, ImgOptimizerPluginSettingsTab } from './settings';
+import { ConfigValues, DEFAULT_SETTINGS, ImgOptimizerPluginSettingsTab } from './settings';
 import { ImageFileObject, ImgOptimizerPluginSettings } from './interfaces';
+import { AIPrompts } from './aiprompt';
+import { ImageTextModal } from './aiprompt_modal';
+
 
 export default class ImgWebpOptimizerPlugin extends Plugin {
 	settings: ImgOptimizerPluginSettings;
@@ -22,43 +25,46 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		// This adds an editor command that can perform some operation on the current editor instance
 		this.addCommand({
 			id: 'paste-optimized-img',
-			name: 'Embed clipboard image as WEBP/AVIF/PNG format',
+			name: 'Embed clipboard image in WEBP/AVIF/PNG/JPEG format',
 			editorCallback: (editor: Editor, view: MarkdownView) => {
-				this.handleClipboardImage(editor, view).then(() => {});
+				this.handleClipboardImage(editor, view);
 			}
 		});
 
-		this.addRibbonIcon('image-plus', 'Embed clipboard image in WEBP/AVIF/PNG/JPEG format', () => {
-			try {
-				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if(view?.editor) {
-					this.handleClipboardImage(view.editor, view).then(() => {});
-				}
-			} catch {
-				return;
+		this.addCommand({
+			id: 'call-multimodal-ai',
+			name: 'Convert clipboard image to Markdown/Latex',
+			editorCallback: (editor: Editor, view: MarkdownView) => {
+				this.handleMultiModalAI(view.editor, view);
 			}
-		  });
+		});
+
+		// editor-menu
+		this.registerEvent(
+			this.app.workspace.on('editor-menu', (menu, editor, view) => {
+				if (view instanceof MarkdownView) {
+
+					menu.addItem((item) => {
+						item.setTitle(`Clipboard: Embed optimized ${this.settings.imageFormat.toUpperCase()}`).setIcon('image-plus')
+							.onClick(async () => this.handleClipboardImage(editor, view));
+					});
+
+					menu.addItem((item) => {
+						item.setTitle(`Clipboard: Convert to Markdown`).setIcon('brain-circuit')
+							.onClick(async () => this.handleMultiModalAI(editor, view));
+					});
+
+					menu.addItem((item) => {
+						item.setTitle(`Clipboard: Summarize text`).setIcon('clipboard-pen-line')
+							.onClick(async () => this.summarizeSelectedText(editor));
+					});
+				}
+			})
+		);
 	}
 
 	onunload() {
 
-	}
-
-	/**
-	 * Generate a random filename that includes the current date and time in ISO format and a 5 character random string.
-	 * @param {string} [fileExtension] - The file extension of the filename. If not provided, an empty string is used.
-	 * @returns {string} A filename with the format: `PastedImage_{ISODateTime}_{randomString}[.{fileExtension}]`
-	 */
-	randomFilename(fileExtension: string = ''): string {
-		// PastedImage_{randomString}_{ISODateTime}
-		const randomString = Math.random().toString(36).slice(-5);
-		const ISODateTime = new Date().toISOString().replace(/[:.-]/g, '');
-		
-		// fileExtension?
-		fileExtension = (fileExtension.length > 0) ? `.${fileExtension.toLowerCase()}` : '';
-
-		// return filename
-		return `PastedImage_${ISODateTime}_${randomString}${fileExtension}`;
 	}
 
 	/**
@@ -104,9 +110,10 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		}
 
 		// generate random filename
-		file.randomFilename = this.randomFilename(file.fileExtension);
+		file.randomFilename = tUtils.randomFilename(file.fileExtension);
 		return file;
 	}
+
 	/**
 	 * Process a given blob by converting it to an AVIF buffer using the `convertImage` helper function.
 	 * @param {Blob} blob - The blob to process.
@@ -123,7 +130,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		};
 
 		const adapter = <FileSystemAdapter> this.app.vault.adapter;
-		const tempFilename = this.randomFilename();
+		const tempFilename = tUtils.randomFilename();
 
 		// 1, we save a PNG file
 		const tempPNG_normalizedPath = await this.app.fileManager.getAvailablePathForAttachment(`${tempFilename}.png`);
@@ -175,6 +182,32 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		}
     }
 
+	/**
+	 * A wrapper function for converting a blob to a file that can be embedded
+	 * in a markdown file. The returned string is the path of the created file.
+	 * @param {Blob} blob - The blob to convert.
+	 * @returns {Promise<string | null>} - A promise that resolves to the path of the created file, or null.
+	 */
+	async convertWrapper(blob: Blob): Promise<string | null> {
+		const fileObject = await this.convertTo(blob);
+
+		if (fileObject !== null) {
+			let file: TFile;
+
+			if(fileObject?.hasTFile instanceof TFile) {
+				file = <TFile> fileObject.hasTFile;
+			} else {
+				const filePath = await this.app.fileManager.getAvailablePathForAttachment(fileObject.randomFilename);
+				file = await this.app.vault.createBinary(filePath, <ArrayBuffer> fileObject.buffer);
+			}
+
+			// Embed the image in the current markdown file
+			return file.path;
+		}
+
+		return null;
+	}
+
     /**
      * Handle pasting an image from the clipboard.
      * @param editor - The editor for the current markdown file.
@@ -194,29 +227,191 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			.filter(item => item.types.includes("image/png"))
 			.map(async (item) => {
 				const blob = await item.getType("image/png");
-				const fileObject = await this.convertTo(blob);
+				const filePath = await this.convertWrapper(blob);
 
-				if (fileObject !== null) {
-					let file: TFile;
-
-					if(fileObject?.hasTFile instanceof TFile) {
-						file = <TFile> fileObject.hasTFile;
-					} else {
-						const filePath = await this.app.fileManager.getAvailablePathForAttachment(fileObject.randomFilename);
-						file = await this.app.vault.createBinary(filePath, <ArrayBuffer> fileObject.buffer);
-					}
-
+				if(filePath !== null) {
 					// Embed the image in the current markdown file
-					const embedMarkdown = `![[${file.path}]]`;
+					const embedMarkdown = `![[${filePath}]]`;
 					editor.replaceSelection(embedMarkdown);
 					
-					new Notice(`Image saved as ${file.name}`);
+					new Notice(`Image saved as ${filePath}`);
 				}
 			});
 
 		this.locked = true;
 		await Promise.all(promises);
 		this.locked = false;
-    }	
+    }
 
+	/**
+	 * Calls the selected AI model to convert a given image blob to a markdown string.
+	 * @param blob - The image blob to convert.
+	 * @returns A promise that resolves to a markdown string or null if the conversion fails.
+	 */
+    async convertImageToMarkdown(blob: Blob): Promise<string | null> {
+		const aiModel = ConfigValues.aiModels.find(item => item.model_id === this.settings.aiModel);
+		const aiModel_APIKey = this.settings.aiModelAPIKey;
+
+		if(aiModel === undefined) {
+			new Notice(`AI Model not found!`);
+			return null;
+		}
+
+		if(aiModel_APIKey.length === 0) {
+			new Notice(`AI Model API Key not found!`);
+			return null;
+		}
+
+		console.log(`calling AI Model: ${aiModel.model_id}`);
+
+		let resultText = '';
+
+		try {
+			switch (aiModel.platform_id.toLowerCase()) {
+				case 'anthropic':
+					resultText = await AIPrompts.convertImageToMarkdown_Anthropic(this.app, blob, aiModel.model_id, aiModel_APIKey);
+					break;
+
+				case 'google':
+					resultText = await AIPrompts.convertImageToMarkdown_Google(this.app, blob, aiModel.model_id, aiModel_APIKey);
+					break;
+
+				case 'mistral':
+					resultText = await AIPrompts.convertImageToMarkdown_Mistral(this.app, blob, aiModel.model_id, aiModel_APIKey);
+					break;
+			
+				default:
+					resultText = '';
+					break;
+			}
+		} catch (error) {
+			resultText = `Error in calling AI Model: ${aiModel.model_id}.\n${error}`;
+		}
+
+		return resultText;
+    }
+
+	/**
+	 * Handles the conversion of clipboard images to Markdown and LaTeX using AI models.
+	 * 
+	 * This method checks if an image is in the clipboard, interacts with a selected AI model 
+	 * to convert the image to a Markdown string, and presents the result in a modal. The user 
+	 * can choose to include the image in the current Markdown file, or only the converted text.
+	 * 
+	 * @param editor - The editor for the current markdown file.
+	 * @param view - The markdown view for the current markdown file.
+	 */
+    async handleMultiModalAI(editor: Editor, view: MarkdownView) {
+		if(this.locked) {
+			new Notice(`Image Conversion in Progress: Please hold on for a moment.`);
+			return;
+		}
+
+        const clipboardItems = await navigator.clipboard.read();
+        if (!clipboardItems) return;
+
+		const promises = clipboardItems
+			.filter(item => item.types.includes("image/png"))
+			.map(async (item) => {
+				new Notice(`Interacting with AI...`);
+				const blob = await item.getType("image/png");
+				let resultText = await this.convertImageToMarkdown(blob);
+
+				if(resultText === null) {
+					resultText = `Error in interacting with AI model: ${this.settings.aiModel}.`;
+				}
+
+				const modal = new ImageTextModal(this.app, blob, resultText);
+				const result = await modal.openWithPromise();
+				if(result !== null) {
+					if(result.includeImage === true) {
+						const filePath = await this.convertWrapper(blob);
+
+						if(filePath !== null) {
+							// Embed the image in the current markdown file
+							const embedMarkdown = `![[${filePath}]]`;
+							editor.replaceSelection(`\n${embedMarkdown}\n`);
+
+							new Notice(`Image saved as ${filePath}`);
+						}
+					}
+
+					editor.replaceSelection(`\n${result.textContent}\n`);
+				}
+			});
+
+		this.locked = true;
+		await Promise.all(promises);
+		this.locked = false;
+    }
+
+	/**
+	 * Summarizes the currently selected text in the markdown editor using the chosen AI model.
+	 * 
+	 * This method gets the selected text, interacts with the selected AI model to summarize the text,
+	 * and inserts the summarized text below the original selection.
+	 * 
+	 * @param editor - The markdown editor.
+	 */
+	async summarizeSelectedText(editor: Editor) {
+		const aiModel = ConfigValues.aiModels.find(item => item.model_id === this.settings.aiModel);
+		const aiModel_APIKey = this.settings.aiModelAPIKey;
+
+		let selectedText = editor.getSelection().trim();
+
+		if (selectedText.length == 0) {
+		  	new Notice("No text selected");
+		  	return;
+		}
+
+		if(this.locked) {
+			new Notice(`Image Conversion in Progress: Please hold on for a moment.`);
+			return;
+		}
+
+		if(aiModel === undefined) {
+			new Notice(`AI Model not found!`);
+			return;
+		}
+
+		if(aiModel_APIKey.length === 0) {
+			new Notice(`AI Model API Key not found!`);
+			return null;
+		}
+
+		this.locked = true;
+		console.log(`calling AI Model: ${aiModel.model_id}`);
+	
+		// Step 2: Paste the selection to an async function and await the result
+		let resultText = '';
+
+		try {
+			switch (aiModel.platform_id.toLowerCase()) {
+				case 'anthropic':
+					resultText = await AIPrompts.summarizeText_Anthropic(selectedText, aiModel.model_id, aiModel_APIKey);
+					break;
+
+				case 'google':
+					resultText = await AIPrompts.summarizeText_Google(selectedText, aiModel.model_id, aiModel_APIKey);
+					break;
+
+				case 'mistral':
+					resultText = await AIPrompts.summarizeText_Mistral(selectedText, aiModel.model_id, aiModel_APIKey);
+					break;
+			
+				default:
+					resultText = '';
+					break;
+			}
+		} catch (error) {
+			resultText = `Error in calling AI Model: ${aiModel.model_id}.\n${error}`;
+		}
+
+	
+		// Step 3: Insert the returned text below the original selection
+		const cursor = editor.getCursor('to');  // Get the end position of the selection
+		editor.replaceRange(`\n${resultText}`, cursor);
+
+		this.locked = false;
+	}
 }

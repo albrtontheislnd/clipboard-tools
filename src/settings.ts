@@ -1,21 +1,43 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import ImgWebpOptimizerPlugin from "./main";
-import { ImgOptimizerPluginSettings } from "./interfaces";
+import { ImgOptimizerPluginSettings, AIModel } from "./interfaces";
 
 export const DEFAULT_SETTINGS: Partial<ImgOptimizerPluginSettings> = {
 	imageFormat: 'webp',
 	compressionLevel: 90,
 	binExec: '',
+	aiModel: '0',
+	aiModelAPIKey: '',
   };
 
 export const ConfigValues = {
 	validFormats: ["webp", "png", "avif", "jpeg"],
-}
+	aiModels: [
+		{
+			model_id: 'claude-3-5-sonnet-20241022',
+			platform_id: 'Anthropic',
+		},
+		{
+			model_id: 'gemini-1.5-flash',
+			platform_id: 'Google'
+		},
+		{
+			model_id: 'pixtral-12b-2409',
+			platform_id: 'Mistral'
+		}
+	] as AIModel[],
+};
 
 const validFormatsOptions: Record<string, string> = ConfigValues.validFormats.reduce((acc, item) => {
 	acc[item] = item.toUpperCase();
 	return acc;
   }, {} as Record<string, string>);
+
+const validAIModelsOptions: Record<string, string> = ConfigValues.aiModels.reduce((acc, item: AIModel, index) => {
+	const value = item.model_id;
+	acc[value] = `${item.model_id} (${item.platform_id})`;
+return acc;
+}, {} as Record<string, string>);
 
 export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 	plugin: ImgWebpOptimizerPlugin;
@@ -83,6 +105,34 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 			.onChange(async (value) => {
 				// validation
 				this.plugin.settings.binExec = value.trim();
+				await this.plugin.saveSettings();
+			})
+		);
+
+		// AI Models
+		new Setting(containerEl)
+		.setName('AI Model')
+		.setDesc('Select an AI model (image to md/latex)')
+		.addDropdown((text) =>
+			text
+			.addOptions(validAIModelsOptions)
+			.setValue(this.plugin.settings.aiModel)
+			.onChange(async (value: string) => {
+				// validation
+				this.plugin.settings.aiModel = value;
+				await this.plugin.saveSettings();
+			})
+		);
+
+		new Setting(containerEl)
+		.setName('AI Model API Key')
+		.setDesc('Enter API Key here.')
+		.addText((text) =>
+			text
+			.setValue(this.plugin.settings.aiModelAPIKey)
+			.onChange(async (value) => {
+				// validation
+				this.plugin.settings.aiModelAPIKey = value.trim();
 				await this.plugin.saveSettings();
 			})
 		);

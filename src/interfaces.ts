@@ -3,6 +3,8 @@ export interface ImgOptimizerPluginSettings {
 	imageFormat: string; // webp | avif | png
 	compressionLevel: number,
 	binExec: string,
+	aiModel: string,
+	aiModelAPIKey: string,
 } 
 
 export interface ImageFileObject {
@@ -11,4 +13,9 @@ export interface ImageFileObject {
 	buffer: ArrayBuffer | null;
 	randomFilename: string;
 	hasTFile ?: any;
+}
+
+export interface AIModel {
+	model_id: string;
+	platform_id: string;
 }
