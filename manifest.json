@@ -1,9 +1,9 @@
 {
-  "id": "img-webp-optimizer",
-  "name": "Image WebP Optimizer",
+  "id": "clipboard-tools",
+  "name": "Clipboard Tools: Optimizer & Conversion",
   "version": "1.0.2",
   "minAppVersion": "0.15.0",
-  "description": "Automatically converts clipboard images to WebP format upon pasting.",
+  "description": "Optimize clipboard images with WEBP/AVIF formats. Leverages AI models to convert them to Markdown/LaTeX.",
   "author": "Do Quang Tu",
   "authorUrl": "https://www.doquangtu.com",
   "fundingUrl": "https://buymeacoffee.com/albrtontheislnd",
