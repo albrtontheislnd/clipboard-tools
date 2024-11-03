@@ -4,7 +4,6 @@ export interface ImgOptimizerPluginSettings {
 	compressionLevel: number,
 	binExec: string,
 	aiModel: string,
-	aiModelAPIKey: string,
 	aiModelAPIKeys: StringKeyObject,
 } 
 

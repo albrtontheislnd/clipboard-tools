@@ -252,7 +252,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	 */
     async convertImageToMarkdown(blob: Blob): Promise<string | null> {
 		const aiModel = ConfigValues.aiModels.find(item => item.model_id === this.settings.aiModel);
-		const aiModel_APIKey = this.settings.aiModelAPIKey;
+		const aiModel_APIKey = String(this.settings.aiModelAPIKeys[this.settings.aiModel]);
 
 		if(aiModel === undefined) {
 			new Notice(`AI Model not found!`);
@@ -357,7 +357,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	 */
 	async summarizeSelectedText(editor: Editor) {
 		const aiModel = ConfigValues.aiModels.find(item => item.model_id === this.settings.aiModel);
-		const aiModel_APIKey = this.settings.aiModelAPIKey;
+		const aiModel_APIKey = String(this.settings.aiModelAPIKeys[this.settings.aiModel]);
 
 		let selectedText = editor.getSelection().trim();
 

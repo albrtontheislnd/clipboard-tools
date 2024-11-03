@@ -7,7 +7,6 @@ export const DEFAULT_SETTINGS: Partial<ImgOptimizerPluginSettings> = {
 	compressionLevel: 90,
 	binExec: '',
 	aiModel: '0',
-	aiModelAPIKey: '',
 	aiModelAPIKeys: {},
   };
 
