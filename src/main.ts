@@ -148,6 +148,8 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			tempAVIF_absolutePath, 
 			this.settings.compressionLevel);
 
+		console.log(execResult.stderr, execResult.stdout, execResult.result);
+
 		// 4, check
 		const _file = this.app.vault.getFileByPath(tempAVIF_normalizedPath);
 
@@ -313,12 +315,12 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		const promises = clipboardItems
 			.filter(item => item.types.includes("image/png"))
 			.map(async (item) => {
-				new Notice(`Interacting with AI...`);
+				new Notice(`Interacting with ${this.settings.aiModel}`);
 				const blob = await item.getType("image/png");
 				let resultText = await this.convertImageToMarkdown(blob);
 
 				if(resultText === null) {
-					resultText = `Error in interacting with AI model: ${this.settings.aiModel}.`;
+					resultText = `Error in interacting with AI model: ${this.settings.aiModel}`;
 				}
 
 				const modal = new ImageTextModal(this.app, blob, resultText);
@@ -380,6 +382,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		}
 
 		this.locked = true;
+		new Notice(`Interacting with ${this.settings.aiModel}`);
 		console.log(`calling AI Model: ${aiModel.model_id}`);
 	
 		// Step 2: Paste the selection to an async function and await the result

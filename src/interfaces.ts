@@ -5,7 +5,12 @@ export interface ImgOptimizerPluginSettings {
 	binExec: string,
 	aiModel: string,
 	aiModelAPIKey: string,
+	aiModelAPIKeys: StringKeyObject,
 } 
+
+export interface StringKeyObject {
+	[key: string]: string;
+}
 
 export interface ImageFileObject {
 	mimeType: string;

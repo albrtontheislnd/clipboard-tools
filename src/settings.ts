@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, PluginSettingTab, Setting, TextComponent } from "obsidian";
 import ImgWebpOptimizerPlugin from "./main";
 import { ImgOptimizerPluginSettings, AIModel } from "./interfaces";
 
@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS: Partial<ImgOptimizerPluginSettings> = {
 	binExec: '',
 	aiModel: '0',
 	aiModelAPIKey: '',
+	aiModelAPIKeys: {},
   };
 
 export const ConfigValues = {
@@ -41,6 +42,7 @@ return acc;
 
 export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 	plugin: ImgWebpOptimizerPlugin;
+	apiKey_Field: TextComponent | null;
   
 	/**
 	 * Creates an instance of the ImgOptimizerPluginSettingsTab class.
@@ -50,6 +52,7 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 	constructor(app: App, plugin: ImgWebpOptimizerPlugin) {
 	  super(app, plugin);
 	  this.plugin = plugin;
+	  this.apiKey_Field = null;
 	}
   
 	/**
@@ -120,6 +123,12 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 			.onChange(async (value: string) => {
 				// validation
 				this.plugin.settings.aiModel = value;
+
+				if(this.apiKey_Field !== null) {
+					const value = String(this.plugin.settings.aiModelAPIKeys[this.plugin.settings.aiModel]);
+					this.apiKey_Field.setValue(value);
+				}
+
 				await this.plugin.saveSettings();
 			})
 		);
@@ -127,14 +136,20 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 		new Setting(containerEl)
 		.setName('AI Model API Key')
 		.setDesc('Enter API Key here.')
-		.addText((text) =>
-			text
-			.setValue(this.plugin.settings.aiModelAPIKey)
-			.onChange(async (value) => {
-				// validation
-				this.plugin.settings.aiModelAPIKey = value.trim();
-				await this.plugin.saveSettings();
-			})
+		.addText((text) => {
+				this.apiKey_Field = text;
+
+				text
+				.setValue(String(this.plugin.settings.aiModelAPIKeys[this.plugin.settings.aiModel]))
+				.onChange(async (value) => {
+					// validation
+					if(this.plugin.settings.aiModel.trim().length > 0) {
+						this.plugin.settings.aiModelAPIKeys[this.plugin.settings.aiModel] = value.trim();
+						await this.plugin.saveSettings();
+					}
+				});
+				// end.
+			}
 		);
 
 	}
