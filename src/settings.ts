@@ -26,6 +26,10 @@ export const ConfigValues = {
 		{
 			model_id: 'pixtral-12b-2409',
 			platform_id: 'Mistral'
+		},
+		{
+			model_id: 'meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo',
+			platform_id: 'TogetherAI'
 		}
 	] as AIModel[],
 };

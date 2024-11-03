@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Mistral } from '@mistralai/mistralai';
+import OpenAI from "openai";
 import { App } from "obsidian";
 import { tUtils } from "./utils";
 
@@ -282,6 +283,73 @@ export class AIPrompts {
 
         if ('choices' in chatResponse && chatResponse.choices) {
             return String(chatResponse.choices[0]?.message?.content);
+        } else {
+            // handle the case where chatResponse.choices is undefined
+            return '';
+        }
+	}
+
+    static async convertImageToMarkdown_TogetherAI(app: App, blob: Blob, model: string, apiKey: string): Promise<string> {
+        const client = new OpenAI({
+            apiKey: apiKey,
+            baseURL: "https://api.together.xyz/v1",
+            dangerouslyAllowBrowser: true,
+          });
+
+        // const image_media_type = 'image/webp';
+        const image_data = await tUtils.getImageData(blob, {
+            maxDimensions: 1000,
+            maxPixels: 1000000,
+            format: 'webp',
+        }, 'DataURL');
+
+        const response = await client.chat.completions.create({
+            model: model,
+            temperature: 0.1,
+            stream: false,
+            messages: [
+              { role: 'user', content: [
+                { type: 'text', text: AIPrompts.getImageToMarkdown_Prompt() },
+                { type: 'image_url', image_url: { url: <string> image_data } }
+              ] },
+            ],
+          });
+
+        if ('choices' in response && response.choices) {
+            return String(response.choices[0]?.message?.content);
+        } else {
+            // handle the case where chatResponse.choices is undefined
+            return '';
+        }
+	}
+
+    /**
+     * Calls the Mistral AI model to summarize the given Markdown text.
+     * @param originalText - The Markdown text to summarize.
+     * @param model - The model ID of the Mistral AI to use for summarization.
+     * @param apiKey - The API key for the Mistral AI service.
+     * @returns A promise that resolves to a Markdown string containing the summarized text.
+     */
+    static async summarizeText_TogetherAI(originalText: string, model: string, apiKey: string): Promise<string> {
+        const client = new OpenAI({
+            apiKey: apiKey,
+            baseURL: "https://api.together.xyz/v1",
+            dangerouslyAllowBrowser: true,
+          });
+
+        const prompt = `You are an expert research assistant. Here is a Markdown document you will process (wrapped by tag <doc>): \n<doc>${originalText}</doc> \n${AIPrompts.getSummarizeText_Prompt()}`;
+
+        const response = await client.chat.completions.create({
+            model: model,
+            messages: [
+              { role: 'user', content: [
+                { type: 'text', text: prompt },
+              ] },
+            ],
+          });
+
+        if ('choices' in response && response.choices) {
+            return String(response.choices[0]?.message?.content);
         } else {
             // handle the case where chatResponse.choices is undefined
             return '';

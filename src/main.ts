@@ -291,7 +291,11 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 				case 'mistral':
 					resultText = await AIPrompts.convertImageToMarkdown_Mistral(this.app, blob, aiModel.model_id, aiModel_APIKey);
 					break;
-			
+
+				case 'togetherai':
+					resultText = await AIPrompts.convertImageToMarkdown_TogetherAI(this.app, blob, aiModel.model_id, aiModel_APIKey);
+					break;
+
 				default:
 					resultText = '';
 					break;
@@ -401,6 +405,10 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 
 				case 'mistral':
 					resultText = await AIPrompts.summarizeText_Mistral(selectedText, aiModel.model_id, aiModel_APIKey);
+					break;
+
+				case 'togetherai':
+					resultText = await AIPrompts.summarizeText_TogetherAI(selectedText, aiModel.model_id, aiModel_APIKey);
 					break;
 			
 				default:
