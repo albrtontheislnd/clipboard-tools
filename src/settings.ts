@@ -1,6 +1,8 @@
-import { App, PluginSettingTab, Setting, TextComponent } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting, TextComponent } from "obsidian";
 import ImgWebpOptimizerPlugin from "./main";
 import { ImgOptimizerPluginSettings, AIModel } from "./interfaces";
+import { tUtils } from "./utils";
+import { tSecureString } from "./secure";
 
 export const DEFAULT_SETTINGS: Partial<ImgOptimizerPluginSettings> = {
 	imageFormat: 'webp',
@@ -68,7 +70,7 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
   
 		new Setting(containerEl)
 		.setName('Image format')
-		.setDesc('Default image format (accepts WEBP/AVIF/PNG/JPEG)')
+		.setDesc('Accepts WEBP/AVIF/PNG/JPEG')
 		.addDropdown((text) =>
 			text
 			.addOptions(validFormatsOptions)
@@ -121,30 +123,28 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 			.setValue(this.plugin.settings.aiModel)
 			.onChange(async (value: string) => {
 				// validation
-				this.plugin.settings.aiModel = value;
-
 				if(this.apiKey_Field !== null) {
-					const value = String(this.plugin.settings.aiModelAPIKeys[this.plugin.settings.aiModel]);
-					this.apiKey_Field.setValue(value);
+					this.plugin.settings.aiModel = value;
+					this.apiKey_Field.setValue(await tUtils.getRawApiKey(this.plugin.settings.aiModel, this.app, this.plugin.settings));
+					await this.plugin.saveSettings();
 				}
-
-				await this.plugin.saveSettings();
 			})
 		);
 
 		new Setting(containerEl)
-		.setName('AI Model API Key')
-		.setDesc('Enter API Key here.')
+		.setName('AI Model API Key Editor')
+		.setDesc('Select a model to view/edit its associated API Key.')
 		.addText((text) => {
 				this.apiKey_Field = text;
-
 				text
-				.setValue(String(this.plugin.settings.aiModelAPIKeys[this.plugin.settings.aiModel]))
+				.setPlaceholder('select a model...')
 				.onChange(async (value) => {
-					// validation
-					if(this.plugin.settings.aiModel.trim().length > 0) {
-						this.plugin.settings.aiModelAPIKeys[this.plugin.settings.aiModel] = value.trim();
+					try {
+						const h = await tUtils.encodeRawApiKey(value, this.app, this.plugin.settings);
+						this.plugin.settings.aiModelAPIKeys[this.plugin.settings.aiModel] = h;
 						await this.plugin.saveSettings();
+					} catch (error) {
+						console.log(error);
 					}
 				});
 				// end.

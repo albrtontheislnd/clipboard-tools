@@ -2,6 +2,8 @@ import { execFile } from "child_process";
 import { promises as fs } from "fs";
 import { App, FileSystemAdapter, TFile } from "obsidian";
 import * as path from "path";
+import { tSecureString } from "./secure";
+import { ImgOptimizerPluginSettings } from "./interfaces";
 
 
 /**
@@ -243,4 +245,39 @@ export class tUtils {
             return null;
           }
     }
+
+	static getAbsoluteVaultPath(app: App) {
+		try {
+			const adapter = <FileSystemAdapter> app.vault.adapter;
+			return adapter.getFullPath(app.vault.getRoot().path);
+		} catch {
+			return null;
+		}
+	}
+
+	static async getRawApiKey(model: string, app: App, settings: ImgOptimizerPluginSettings): Promise<string> {
+		const h = String(settings.aiModelAPIKeys[model]);
+		const s = model;
+		const p = tUtils.getAbsoluteVaultPath(app)?.toString() ?? '';
+		
+		try {
+			const v = await tSecureString.decrypt(h, p, s);
+			return v ?? '';
+		} catch {
+			return '';
+		}
+	}
+
+	static async encodeRawApiKey(originalApiKey: string, app: App, settings: ImgOptimizerPluginSettings): Promise<string> {
+		originalApiKey = originalApiKey.trim();
+		const p = tUtils.getAbsoluteVaultPath(app)?.toString() ?? '';
+		const s = settings.aiModel;
+		
+		try {
+			const v = await tSecureString.encrypt(originalApiKey, p, s);
+			return v ?? '';
+		} catch {
+			return '';
+		}
+	}
  }

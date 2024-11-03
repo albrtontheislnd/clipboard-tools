@@ -26,16 +26,24 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		this.addCommand({
 			id: 'paste-optimized-img',
 			name: 'Embed clipboard image in WEBP/AVIF/PNG/JPEG format',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				this.handleClipboardImage(editor, view);
+			editorCallback: async (editor: Editor, view: MarkdownView) => {
+				await this.handleClipboardImage(editor, view);
 			}
 		});
 
 		this.addCommand({
-			id: 'call-multimodal-ai',
+			id: 'ai-convert-md',
 			name: 'Convert clipboard image to Markdown/Latex',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				this.handleMultiModalAI(view.editor, view);
+			editorCallback: async (editor: Editor, view: MarkdownView) => {
+				await this.handleMultiModalAI(editor, view);
+			}
+		});
+
+		this.addCommand({
+			id: 'ai-summarize-text',
+			name: 'Summarize text',
+			editorCallback: async (editor: Editor, view: MarkdownView) => {
+				await this.summarizeSelectedText(editor);
 			}
 		});
 
@@ -43,7 +51,6 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		this.registerEvent(
 			this.app.workspace.on('editor-menu', (menu, editor, view) => {
 				if (view instanceof MarkdownView) {
-
 					menu.addItem((item) => {
 						item.setTitle(`Clipboard: Embed optimized ${this.settings.imageFormat.toUpperCase()}`).setIcon('image-plus')
 							.onClick(async () => this.handleClipboardImage(editor, view));
@@ -170,28 +177,30 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	}
 
 	/**
-	 * Converts a given blob to a specific image format.
-	 * @param {Blob} blob - The blob to convert.
-	 * @returns {Promise<ImageFileObject | null>} - A promise that resolves to an object with the converted buffer, mime-type, file extension, and a random filename.
-	 */
-    async convertTo(blob: Blob): Promise<ImageFileObject | null> {
-		switch (this.settings.imageFormat) {
-			case 'webp': return this.ProcessImage(blob, 'webp');
-			case 'png': return this.ProcessImage(blob, 'png');
-			case 'avif': return this.ProcessAVIF(blob);
-			case 'jpeg': return this.ProcessImage(blob, 'jpeg');
-			default: return null;
-		}
-    }
-
-	/**
 	 * A wrapper function for converting a blob to a file that can be embedded
 	 * in a markdown file. The returned string is the path of the created file.
 	 * @param {Blob} blob - The blob to convert.
 	 * @returns {Promise<string | null>} - A promise that resolves to the path of the created file, or null.
 	 */
 	async convertWrapper(blob: Blob): Promise<string | null> {
-		const fileObject = await this.convertTo(blob);
+
+		/**
+		 * Converts a given blob to a specific image format and returns an object with the converted buffer, mime-type, file extension, and a random filename.
+		 * @param {Blob} blob - The blob to convert.
+		 * @param {string} imageFormat - The desired image format. One of 'webp', 'png', 'avif', or 'jpeg'.
+		 * @returns {Promise<ImageFileObject | null>} - A promise that resolves to an object with the converted buffer, mime-type, file extension, and a random filename, or null if the conversion fails.
+		 */
+		const convertTo = async (): Promise<ImageFileObject | null> => {
+			switch (this.settings.imageFormat) {
+				case 'webp': return this.ProcessImage(blob, 'webp');
+				case 'png': return this.ProcessImage(blob, 'png');
+				case 'avif': return this.ProcessAVIF(blob);
+				case 'jpeg': return this.ProcessImage(blob, 'jpeg');
+				default: return null;
+			}
+		};
+
+		const fileObject = await convertTo();
 
 		if (fileObject !== null) {
 			let file: TFile;
@@ -216,14 +225,15 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
      * @param view - The markdown view for the current markdown file.
      */
     async handleClipboardImage(editor: Editor, view: MarkdownView) {
+		const clipboardItems = await navigator.clipboard.read();
 
 		if(this.locked) {
-			new Notice(`Image Conversion in Progress: Please hold on for a moment.`);
+			new Notice(`Image Conversion in Progress: Please hold on for a moment`);
+			return;
+		} else if(!clipboardItems) {
+			new Notice(`Clipboard is empty`);
 			return;
 		}
-
-        const clipboardItems = await navigator.clipboard.read();
-        if (!clipboardItems) return;
 
 		const promises = clipboardItems
 			.filter(item => item.types.includes("image/png"))
@@ -252,19 +262,19 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	 */
     async convertImageToMarkdown(blob: Blob): Promise<string | null> {
 		const aiModel = ConfigValues.aiModels.find(item => item.model_id === this.settings.aiModel);
-		const aiModel_APIKey = String(this.settings.aiModelAPIKeys[this.settings.aiModel]);
+		const aiModel_APIKey = await tUtils.getRawApiKey((aiModel === undefined) ? '' : aiModel.model_id, this.app, this.settings);
 
 		if(aiModel === undefined) {
-			new Notice(`AI Model not found!`);
+			new Notice(`AI Model not found`);
 			return null;
-		}
-
-		if(aiModel_APIKey.length === 0) {
-			new Notice(`AI Model API Key not found!`);
+		} else if (aiModel_APIKey.length === 0) {
+			new Notice(`AI Model API Key not found`);
 			return null;
+		} else {
+			const msg = `Interacting with ${aiModel.model_id}`;
+			console.log(msg);
+			new Notice(msg);
 		}
-
-		console.log(`calling AI Model: ${aiModel.model_id}`);
 
 		let resultText = '';
 
@@ -304,40 +314,37 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	 * @param view - The markdown view for the current markdown file.
 	 */
     async handleMultiModalAI(editor: Editor, view: MarkdownView) {
+		const clipboardItems = await navigator.clipboard.read();
+
 		if(this.locked) {
-			new Notice(`Image Conversion in Progress: Please hold on for a moment.`);
+			new Notice(`Image Conversion in Progress: Please hold on for a moment`);
+			return;
+		} else if(!clipboardItems) {
+			new Notice(`Clipboard is empty`);
 			return;
 		}
-
-        const clipboardItems = await navigator.clipboard.read();
-        if (!clipboardItems) return;
 
 		const promises = clipboardItems
 			.filter(item => item.types.includes("image/png"))
 			.map(async (item) => {
-				new Notice(`Interacting with ${this.settings.aiModel}`);
 				const blob = await item.getType("image/png");
-				let resultText = await this.convertImageToMarkdown(blob);
 
-				if(resultText === null) {
-					resultText = `Error in interacting with AI model: ${this.settings.aiModel}`;
-				}
+				let resultText = await this.convertImageToMarkdown(blob);
+				if(resultText === null) resultText = `Error in interacting with AI model: ${this.settings.aiModel}`;
 
 				const modal = new ImageTextModal(this.app, blob, resultText);
 				const result = await modal.openWithPromise();
+
 				if(result !== null) {
 					if(result.includeImage === true) {
 						const filePath = await this.convertWrapper(blob);
 
 						if(filePath !== null) {
-							// Embed the image in the current markdown file
-							const embedMarkdown = `![[${filePath}]]`;
+							const embedMarkdown = `![[${filePath}]]`; // Embed the image in the current markdown file
 							editor.replaceSelection(`\n${embedMarkdown}\n`);
-
 							new Notice(`Image saved as ${filePath}`);
 						}
 					}
-
 					editor.replaceSelection(`\n${result.textContent}\n`);
 				}
 			});
@@ -357,35 +364,29 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	 */
 	async summarizeSelectedText(editor: Editor) {
 		const aiModel = ConfigValues.aiModels.find(item => item.model_id === this.settings.aiModel);
-		const aiModel_APIKey = String(this.settings.aiModelAPIKeys[this.settings.aiModel]);
-
-		let selectedText = editor.getSelection().trim();
+		const aiModel_APIKey = await tUtils.getRawApiKey((aiModel === undefined) ? '' : aiModel.model_id, this.app, this.settings);
+		const selectedText = editor.getSelection().trim();
 
 		if (selectedText.length == 0) {
-		  	new Notice("No text selected");
-		  	return;
-		}
-
-		if(this.locked) {
-			new Notice(`Image Conversion in Progress: Please hold on for a moment.`);
+			new Notice("No text selected");
 			return;
-		}
-
-		if(aiModel === undefined) {
-			new Notice(`AI Model not found!`);
+		} else if (this.locked) {
+			new Notice(`Image Conversion in Progress: Please hold on for a moment`);
 			return;
-		}
-
-		if(aiModel_APIKey.length === 0) {
-			new Notice(`AI Model API Key not found!`);
-			return null;
+		} else if (aiModel === undefined) {
+			new Notice(`AI Model not found`);
+			return;
+		} else if (aiModel_APIKey.length == 0) {
+			new Notice(`AI Model API Key not found`);
+			return;
+		} else {
+			const msg = `Interacting with ${this.settings.aiModel}`;
+			console.log(msg);
+			new Notice(msg);
 		}
 
 		this.locked = true;
-		new Notice(`Interacting with ${this.settings.aiModel}`);
-		console.log(`calling AI Model: ${aiModel.model_id}`);
-	
-		// Step 2: Paste the selection to an async function and await the result
+		// Paste the selection to an async function and await the result
 		let resultText = '';
 
 		try {
@@ -409,12 +410,9 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		} catch (error) {
 			resultText = `Error in calling AI Model: ${aiModel.model_id}.\n${error}`;
 		}
-
 	
-		// Step 3: Insert the returned text below the original selection
-		const cursor = editor.getCursor('to');  // Get the end position of the selection
-		editor.replaceRange(`\n${resultText}`, cursor);
-
+		// Insert the returned text below the original selection
+		editor.replaceRange(`\n${resultText}`, editor.getCursor('to')); // Get the end position of the selection
 		this.locked = false;
 	}
 }
