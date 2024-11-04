@@ -5,6 +5,11 @@ import OpenAI from "openai";
 import { App } from "obsidian";
 import { tUtils } from "./utils";
 
+enum AIPromptsForceMode {
+  Default = 0,
+  Llama,
+}
+
 export class AIPrompts {
     /**
      * Generates a prompt string for converting image content to Markdown and LaTeX.
@@ -17,9 +22,14 @@ export class AIPrompts {
      * 
      * @returns A string containing the prompt for the AI model.
      */
-    static getImageToMarkdown_Prompt(): string {
-        const prompt = `Extract all text and mathematical formulas from the provided image. Convert regular text to Markdown syntax, using appropriate formatting (e.g., headers, lists, emphasis) based on the context. For mathematical expressions, convert them to LaTeX format, encapsulating them in $...$ for inline math or $$...$$ for display math, as appropriate. Ensure the resulting output maintains the logical flow and structure of the original content.`;
-        return prompt;
+    static getImageToMarkdown_Prompt(forceMode: AIPromptsForceMode = AIPromptsForceMode.Default): string {
+        switch (forceMode) {
+          case AIPromptsForceMode.Llama:
+            return `Perform OCR on the screenshot and extract text and mathematical formulas. Convert the extracted text into Markdown syntax and mathematical formulas into LaTex syntax. Do not include any additional information, only the converted text and formulas.`;
+        
+          default:
+            return `Extract all text and mathematical formulas from the provided image. Convert regular text to Markdown syntax, using appropriate formatting (e.g., headers, lists, emphasis) based on the context. For mathematical expressions, convert them to LaTeX format, encapsulating them in $...$ for inline math or $$...$$ for display math, as appropriate. Ensure the resulting output maintains the logical flow and structure of the original content.`;
+        }
     }
 
     /**
@@ -303,13 +313,23 @@ export class AIPrompts {
             format: 'webp',
         }, 'DataURL');
 
+        let prompt: string;
+
+        if(model.toLowerCase().includes('llama')) {
+          prompt = AIPrompts.getImageToMarkdown_Prompt(AIPromptsForceMode.Llama);
+        } else {
+          prompt = AIPrompts.getImageToMarkdown_Prompt();
+        }
+
+        console.log(prompt);
+
         const response = await client.chat.completions.create({
             model: model,
-            temperature: 0.1,
+            // temperature: 0.2,
             stream: false,
             messages: [
               { role: 'user', content: [
-                { type: 'text', text: AIPrompts.getImageToMarkdown_Prompt() },
+                { type: 'text', text: prompt },
                 { type: 'image_url', image_url: { url: <string> image_data } }
               ] },
             ],
