@@ -161,7 +161,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		const _file = this.app.vault.getFileByPath(tempAVIF_normalizedPath);
 
 		if(_file instanceof TFile) { // success!
-			this.app.vault.delete(tempPNGFile); // we don't need it anymore
+			this.app.fileManager.trashFile(tempPNGFile); // we don't need it anymore
 			file.buffer = null;
 			file.randomFilename = `${tempFilename}.avif`;
 			file.hasTFile = _file;

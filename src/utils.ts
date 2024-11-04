@@ -1,6 +1,6 @@
 import { execFile } from "child_process";
 import { promises as fs } from "fs";
-import { App, FileSystemAdapter, TFile } from "obsidian";
+import { App, FileSystemAdapter, TFile, Platform } from "obsidian";
 import * as path from "path";
 import { tSecureString } from "./secure";
 import { ImgOptimizerPluginSettings } from "./interfaces";
@@ -57,7 +57,7 @@ export class tUtils {
 		result: boolean,
 	}> {
 		const appCheck = await tUtils.findProgPath(progPath);
-		const app = path.basename(String(appCheck), process.platform === 'win32' ? '.exe' : '').toLowerCase();
+		const app = path.basename(String(appCheck), Platform.isWin ? '.exe' : '').toLowerCase();
 		let args;
 
 		switch (app) {
@@ -120,7 +120,7 @@ export class tUtils {
 	 * is not executable, or does not have execute permissions.
 	 */
 	static async findProgPath(filePath: string): Promise<string | null> {
-		const execFile = path.basename(filePath, process.platform === 'win32' ? '.exe' : '').toLowerCase();
+		const execFile = path.basename(filePath, Platform.isWin ? '.exe' : '').toLowerCase();
 		if (['magick', 'ffmpeg', 'vips'].includes(execFile)) {
 			try {
 				await fs.access(filePath, fs.constants.X_OK);
@@ -229,7 +229,7 @@ export class tUtils {
 						if(tempFile.stat.size > 0) {
 							return tempFile;
 						} else {
-							await appRef.vault.delete(tempFile);
+							await appRef.fileManager.trashFile(tempFile);
 						}
 					}
 					return null;
