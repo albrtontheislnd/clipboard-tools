@@ -3,7 +3,7 @@ import { promises as fs } from "fs";
 import { App, FileSystemAdapter, TFile, Platform } from "obsidian";
 import * as path from "path";
 import { tSecureString } from "./secure";
-import { ImgOptimizerPluginSettings } from "./interfaces";
+import { AIModel, ImgOptimizerPluginSettings } from "./interfaces";
 
 
 /**
@@ -279,5 +279,18 @@ export class tUtils {
 		} catch {
 			return '';
 		}
+	}
+
+	static splitAtFirst(input: string, separator: string = '/'): [string | undefined, string | undefined] {
+		const [firstPart, ...rest] = input.split(separator);
+		return rest.length > 0 ? [firstPart, rest.join("/")] : [undefined, undefined];
+	  }
+
+	static findAIModel(query: string, db: AIModel[]): AIModel | undefined {		
+		const [platformId, modelId] = tUtils.splitAtFirst(query, '/');
+		if(!platformId || !modelId) return undefined;
+
+		return db.find(item => item.model_id === modelId && item.platform_id === platformId);
+
 	}
  }

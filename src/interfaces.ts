@@ -22,4 +22,5 @@ export interface ImageFileObject {
 export interface AIModel {
 	model_id: string;
 	platform_id: string;
+	interface: string;
 }

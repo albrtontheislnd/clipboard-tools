@@ -2,9 +2,8 @@ import { App, Editor, FileSystemAdapter, MarkdownView, Menu, Notice, Plugin, Plu
 import { tUtils } from './utils';
 import { ConfigValues, DEFAULT_SETTINGS, ImgOptimizerPluginSettingsTab } from './settings';
 import { ImageFileObject, ImgOptimizerPluginSettings } from './interfaces';
-import { AIPrompts } from './aiprompt';
 import { ImageTextModal } from './aiprompt_modal';
-
+import { createModelInstance, Mmllm_Anthropic, Mmllm_GoogleGenerativeAI, Mmllm_Mistral, Mmllm_TogetherAI } from './aiprompt';
 
 export default class ImgWebpOptimizerPlugin extends Plugin {
 	settings: ImgOptimizerPluginSettings;
@@ -21,6 +20,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 		this.addSettingTab(new ImgOptimizerPluginSettingsTab(this.app, this));
+
 
 		// This adds an editor command that can perform some operation on the current editor instance
 		this.addCommand({
@@ -71,7 +71,6 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	}
 
 	onunload() {
-
 	}
 
 	/**
@@ -261,8 +260,8 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	 * @returns A promise that resolves to a markdown string or null if the conversion fails.
 	 */
     async convertImageToMarkdown(blob: Blob): Promise<string | null> {
-		const aiModel = ConfigValues.aiModels.find(item => item.model_id === this.settings.aiModel);
-		const aiModel_APIKey = await tUtils.getRawApiKey((aiModel === undefined) ? '' : aiModel.model_id, this.app, this.settings);
+		const aiModel = tUtils.findAIModel(this.settings.aiModel, ConfigValues.aiModels);
+		const aiModel_APIKey = await tUtils.getRawApiKey(`${aiModel?.platform_id}/${aiModel?.model_id}`, this.app, this.settings);
 
 		if(aiModel === undefined) {
 			new Notice(`AI Model not found`);
@@ -277,34 +276,19 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		}
 
 		let resultText = '';
-
+		// logic
 		try {
-			switch (aiModel.platform_id.toLowerCase()) {
-				case 'anthropic':
-					resultText = await AIPrompts.convertImageToMarkdown_Anthropic(this.app, blob, aiModel.model_id, aiModel_APIKey);
-					break;
-
-				case 'google':
-					resultText = await AIPrompts.convertImageToMarkdown_Google(this.app, blob, aiModel.model_id, aiModel_APIKey);
-					break;
-
-				case 'mistral':
-					resultText = await AIPrompts.convertImageToMarkdown_Mistral(this.app, blob, aiModel.model_id, aiModel_APIKey);
-					break;
-
-				case 'togetherai':
-					resultText = await AIPrompts.convertImageToMarkdown_TogetherAI(this.app, blob, aiModel.model_id, aiModel_APIKey);
-					break;
-
-				default:
-					resultText = '';
-					break;
-			}
+			const modelInstance = createModelInstance(aiModel, aiModel_APIKey, this.app);
+			modelInstance.init();
+			await modelInstance.addImage(blob);
+			resultText = await modelInstance.taskOCR();
 		} catch (error) {
+			console.log(error);
 			resultText = `Error in calling AI Model: ${aiModel.model_id}.\n${error}`;
 		}
 
 		return resultText;
+		// end: logic		
     }
 
 	/**
@@ -367,8 +351,9 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	 * @param editor - The markdown editor.
 	 */
 	async summarizeSelectedText(editor: Editor) {
-		const aiModel = ConfigValues.aiModels.find(item => item.model_id === this.settings.aiModel);
-		const aiModel_APIKey = await tUtils.getRawApiKey((aiModel === undefined) ? '' : aiModel.model_id, this.app, this.settings);
+		const aiModel = tUtils.findAIModel(this.settings.aiModel, ConfigValues.aiModels);
+		const aiModel_APIKey = await tUtils.getRawApiKey(`${aiModel?.platform_id}/${aiModel?.model_id}`, this.app, this.settings);
+
 		const selectedText = editor.getSelection().trim();
 
 		if (selectedText.length == 0) {
@@ -384,41 +369,25 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			new Notice(`AI Model API Key not found`);
 			return;
 		} else {
-			const msg = `Interacting with ${this.settings.aiModel}`;
+			const msg = `Interacting with ${aiModel.model_id}`;
 			console.log(msg);
 			new Notice(msg);
 		}
 
 		this.locked = true;
-		// Paste the selection to an async function and await the result
+
 		let resultText = '';
-
+		// logic
 		try {
-			switch (aiModel.platform_id.toLowerCase()) {
-				case 'anthropic':
-					resultText = await AIPrompts.summarizeText_Anthropic(selectedText, aiModel.model_id, aiModel_APIKey);
-					break;
-
-				case 'google':
-					resultText = await AIPrompts.summarizeText_Google(selectedText, aiModel.model_id, aiModel_APIKey);
-					break;
-
-				case 'mistral':
-					resultText = await AIPrompts.summarizeText_Mistral(selectedText, aiModel.model_id, aiModel_APIKey);
-					break;
-
-				case 'togetherai':
-					resultText = await AIPrompts.summarizeText_TogetherAI(selectedText, aiModel.model_id, aiModel_APIKey);
-					break;
-			
-				default:
-					resultText = '';
-					break;
-			}
+			const modelInstance = createModelInstance(aiModel, aiModel_APIKey, this.app);
+			modelInstance.init();
+			resultText = await modelInstance.taskSummarize(selectedText);
 		} catch (error) {
+			console.log(error);
 			resultText = `Error in calling AI Model: ${aiModel.model_id}.\n${error}`;
 		}
-	
+		// end: logic
+
 		// Insert the returned text below the original selection
 		editor.replaceRange(`\n${resultText}`, editor.getCursor('to')); // Get the end position of the selection
 		this.locked = false;

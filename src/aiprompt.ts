@@ -1,379 +1,604 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GenerativeModel, GoogleGenerativeAI } from "@google/generative-ai";
 import { Mistral } from '@mistralai/mistralai';
 import OpenAI from "openai";
-import { App } from "obsidian";
+import { App, TFile } from "obsidian";
 import { tUtils } from "./utils";
+import { AIModel } from "./interfaces";
+import { ChatCompletionContentPartImage } from "openai/resources/chat/completions";
+import { ImageBlockParam } from "@anthropic-ai/sdk/resources";
+import { ContentChunk } from "@mistralai/mistralai/models/components";
+
+type imageSpecs = {
+  maxDimensions: number
+  maxPixels: number
+  format: 'webp' | 'png'
+  mimeType: 'image/webp' | 'image/png'
+  outputType: 'Blob' | 'ArrayBuffer' | 'Uint8Array' | 'TFile' | 'DataURL' | 'Base64'
+}
 
 enum AIPromptsForceMode {
   Default = 0,
   Llama,
 }
 
-export class AIPrompts {
-    /**
-     * Generates a prompt string for converting image content to Markdown and LaTeX.
-     * 
-     * This prompt instructs an AI model to extract text and mathematical formulas 
-     * from an image, convert the text into Markdown with appropriate syntax (e.g., 
-     * headers, lists, emphasis), and convert mathematical expressions into LaTeX 
-     * format. The conversion should preserve the logical flow and structure of the 
-     * original content.
-     * 
-     * @returns A string containing the prompt for the AI model.
-     */
-    static getImageToMarkdown_Prompt(forceMode: AIPromptsForceMode = AIPromptsForceMode.Default): string {
-        switch (forceMode) {
-          case AIPromptsForceMode.Llama:
-            return `Perform OCR on the screenshot and extract text and mathematical formulas. Convert the extracted text into Markdown syntax and mathematical formulas into LaTex syntax. Do not include any additional information, only the converted text and formulas.`;
-        
-          default:
-            return `Extract all text and mathematical formulas from the provided image. Convert regular text to Markdown syntax, using appropriate formatting (e.g., headers, lists, emphasis) based on the context. For mathematical expressions, convert them to LaTeX format, encapsulating them in $...$ for inline math or $$...$$ for display math, as appropriate. Ensure the resulting output maintains the logical flow and structure of the original content.`;
+enum modelRoles {
+  system = 'system',
+  user = 'user',
+  assistant = 'assistant',
+}
+
+interface modelParameters {
+  temperature: number
+  top_p: number
+}
+
+const modelParams: Record<string, modelParameters> = {
+  'ocr': {
+    temperature: 0.1,
+    top_p: 0.9,
+  },
+  'summarize': {
+    temperature: 0.3,
+    top_p: 0.9
+  }
+}
+
+const modelScripts = {
+  'ocr': {
+    'user': [
+      'Extract all text and mathematical formulas from the provided image. Convert regular text to Markdown syntax, using appropriate formatting (e.g., headers, lists, emphasis) based on the context. For mathematical expressions, convert them to LaTeX format, encapsulating them in $...$ for inline math or $$...$$ for display math, as appropriate. Ensure the resulting output maintains the logical flow and structure of the original content.',
+      'Perform OCR on the screenshot and extract text and mathematical formulas. Convert the extracted text into Markdown syntax and mathematical formulas into LaTex syntax. Do not include any additional information, only the converted text and formulas.'
+    ],
+    'system': [
+      'You will be provided with an image, and your task is to extract text and mathematical formulas, then convert the extracted text into Markdown syntax and mathematical formulas into LaTex syntax.'
+    ],
+    'assistant': [
+      'You will be provided with an image, and your task is to extract text and mathematical formulas, then convert the extracted text into Markdown syntax and mathematical formulas into LaTex syntax.'
+    ],
+  },
+  'summarize': {
+    'user': [
+      'Summarize the provided Markdown text into concise, key bullet points. Focus on capturing the main ideas, key steps, or critical information. Aim for brevity, while retaining the essential meaning.',
+    ],
+    'system': [
+      'Summarize the provided Markdown text into concise, key bullet points. Focus on capturing the main ideas, key steps, or critical information. Aim for brevity, while retaining the essential meaning.'
+    ],
+    'assistant': [
+      'Summarize the provided Markdown text into concise, key bullet points. Focus on capturing the main ideas, key steps, or critical information. Aim for brevity, while retaining the essential meaning.'
+    ],
+  },
+}
+
+export function createModelInstance(mmllmService: AIModel, apiKey: string, app: App | undefined = undefined): Mmllm_OpenAI | Mmllm_GoogleGenerativeAI | Mmllm_TogetherAI | Mmllm_Anthropic | Mmllm_Mistral {
+  
+  const classMap: { [key: string]: new (mmllmService: AIModel, apiKey: string, app: App | undefined) => any } = {
+    'Mmllm_GoogleGenerativeAI': Mmllm_GoogleGenerativeAI,
+    'Mmllm_Anthropic': Mmllm_Anthropic,
+    'Mmllm_Mistral': Mmllm_Mistral,
+    'Mmllm_TogetherAI': Mmllm_TogetherAI,
+    'Mmllm_OpenAI': Mmllm_OpenAI,
+  };
+
+  const ClassConstructor = classMap[mmllmService.interface];
+
+  if (ClassConstructor) {
+    return new ClassConstructor(mmllmService, apiKey, app);
+  } else {
+    throw new Error(`Class ${mmllmService.interface} not found.`);
+  }
+}
+
+export class Mmllm {
+  app: App | undefined; // Obsidian App instance
+  service: AIModel;
+  apiKey: string;
+
+  // model-related
+  model: GenerativeModel | OpenAI | Anthropic | Mistral;
+
+  // messages-related
+  imageSpecs: imageSpecs;
+  images: Array<string | Blob | TFile | null> = [];
+
+
+  constructor(mmllmService: AIModel, apiKey: string, app: App | undefined = undefined) {
+    this.app = app;
+    this.apiKey = apiKey;
+    this.service = mmllmService;
+  }
+  async addImage(blob: Blob): Promise<void> {
+    if (blob instanceof Blob) {
+      const imageData = await tUtils.getImageData(blob, {
+          maxDimensions: this.imageSpecs.maxDimensions,
+          maxPixels: this.imageSpecs.maxPixels,
+          format: this.imageSpecs.format,
+      }, this.imageSpecs.outputType);
+
+      this.images.push(imageData);
+    } else {
+      throw new Error("Invalid arguments");
+    }
+  }
+
+  getOCRPrompt(role: modelRoles = modelRoles.user, forceMode: AIPromptsForceMode = AIPromptsForceMode.Default): string {
+
+    // get OCR prompts
+    const task = 'ocr';
+    let prompt: string;
+
+    try {
+      prompt = modelScripts[task][role][forceMode];
+    } catch (error) {
+      prompt = modelScripts[task][modelRoles.user][AIPromptsForceMode.Default];
+      
+    }
+    
+    return prompt;
+  }
+
+  getSummarizePrompt(originalText: string, role: modelRoles = modelRoles.user, forceMode: AIPromptsForceMode = AIPromptsForceMode.Default): string {
+
+    // get OCR prompts
+    const task = 'summarize';
+    const doc: string = `Here is a Markdown document you will process (wrapped by tag <doc>): \n<doc>${originalText}</doc> \n`;
+    let prompt: string;
+
+    try {
+      prompt = modelScripts[task][role][forceMode];
+    } catch (error) {
+      prompt = modelScripts[task][modelRoles.user][AIPromptsForceMode.Default];
+    }
+
+    if(role === modelRoles.user) {
+      return `${doc} ${prompt}`;
+    } else {
+      return prompt;
+    }
+  }
+}
+
+export interface IMmllm {
+  imageSpecs: imageSpecs
+  init(): void
+  taskOCR(): Promise<string>
+  taskSummarize(originalText: string): Promise<string>
+}
+
+export class Mmllm_GoogleGenerativeAI extends Mmllm implements IMmllm {
+
+  imageSpecs: imageSpecs = {
+    maxDimensions: 1000,
+    maxPixels: 1000000,
+    format: 'webp',
+    mimeType: 'image/webp',
+    outputType: 'Base64'
+  };
+  private genAI: GoogleGenerativeAI;
+
+  constructor(mmllmService: AIModel, apiKey: string, app: App | undefined = undefined) {
+    super(mmllmService, apiKey, app);
+  }
+
+  init(): void {
+    // Add your initialization logic here
+    this.genAI = new GoogleGenerativeAI(this.apiKey);
+    this.model = this.genAI.getGenerativeModel({ model: this.service.model_id });
+  }
+
+  async taskOCR(): Promise<string> {
+    const user_prompt = this.getOCRPrompt();
+
+    const imageParts = this.images
+      .filter((image): image is string => typeof image === "string")
+      .map(image => ({
+        inlineData: { 
+          data: image, 
+          mimeType: this.imageSpecs.mimeType 
         }
+      }));
+      
+    if (this.model instanceof GenerativeModel) {
+
+      this.model.generationConfig = {
+        temperature: modelParams['ocr'].temperature,
+        topP: modelParams['ocr'].top_p,
+      };      
+
+      const generatedContent = await this.model.generateContent([user_prompt, ...imageParts]);
+      return generatedContent.response.text();
+    } else {
+      throw new Error(`Model is not an instance of ${this.service.interface}`);
     }
+  }
 
-    /**
-     * Generates a prompt string for summarizing a given Markdown text.
-     * 
-     * This prompt instructs an AI model to extract key information from a Markdown text, 
-     * condensing it into concise bullet points that capture the main ideas, key steps, 
-     * or critical information. The AI model should aim for brevity while retaining the 
-     * essential meaning of the text.
-     * 
-     * @returns A string containing the prompt for the AI model.
-     */
-    static getSummarizeText_Prompt(): string {
-        const prompt = `Summarize the provided Markdown text into concise, key bullet points. Focus on capturing the main ideas, key steps, or critical information. Aim for brevity, while retaining the essential meaning.`;
-        return prompt;
+  async taskSummarize(originalText: string): Promise<string> {
+    const prompt = this.getSummarizePrompt(originalText, modelRoles.user);
+
+    if (this.model instanceof GenerativeModel) {
+
+      this.model.generationConfig = {
+        temperature: modelParams['summarize'].temperature,
+        topP: modelParams['summarize'].top_p,
+      };
+
+      const result = await this.model.generateContent(prompt);
+      return result.response.text();
+    } else {
+      throw new Error(`Model is not an instance of ${this.service.interface}`);
     }
+  }
+}
 
-    /**
-     * Converts an image blob to a markdown string using an Anthropic AI model.
-     * 
-     * This method leverages the `@anthropic-ai/sdk` to process the given image blob,
-     * extracting text and mathematical formulas and converting them into Markdown format.
-     * It leverages a specific AI model identified by the model ID and requires an API key
-     * for authentication.
-     *
-     * @param app - The application instance, used for accessing utilities.
-     * @param blob - The image blob to be converted.
-     * @param model - The model ID of the Anthropic AI to use for conversion.
-     * @param apiKey - The API key for authenticating with the Anthropic AI service.
-     * @returns A promise that resolves to a string containing the converted markdown text.
-     */
-    static async convertImageToMarkdown_Anthropic(app: App, blob: Blob, model: string, apiKey: string): Promise<string> {
-		const anthropic = new Anthropic({
-			apiKey: apiKey,
-			dangerouslyAllowBrowser: true,
-		});
+export class Mmllm_TogetherAI extends Mmllm implements IMmllm {
 
-        const image_media_type = 'image/webp';
-        const image_data = await tUtils.getImageData(blob, {
-            maxDimensions: 1000,
-            maxPixels: 1000000,
-            format: 'webp',
-        }, 'Base64');
+  imageSpecs: imageSpecs = {
+    maxDimensions: 1000,
+    maxPixels: 1000000,
+    format: 'webp',
+    mimeType: 'image/webp',
+    outputType: 'DataURL'
+  };
 
-		const message = await anthropic.messages.create({
-            model: model,
-            max_tokens: 1000,
-            messages: [
-                {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": image_media_type,
-                            "data": <string> image_data,
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": AIPrompts.getImageToMarkdown_Prompt()
-                    }
-                ]
-                }
-            ]
-            });
+  private endpoint = 'https://api.together.xyz/v1';
 
-        const mergedText = message.content
-        .flat() // Flatten array if there are nested arrays
-        .filter(item => item.type === "text") // Filter for items with type "text"
-        .map(item => (item as Anthropic.TextBlock).text) // Map to extract "text" values
-        .join(" "); // Join all "text" values into one string
+  constructor(mmllmService: AIModel, apiKey: string, app: App | undefined = undefined) {
+    super(mmllmService, apiKey, app);
+  }
 
-        return mergedText;
-	}
+  init(): void {
+    // Add your initialization logic here
+    this.model = new OpenAI({
+      apiKey: this.apiKey,
+      baseURL: this.endpoint,
+      dangerouslyAllowBrowser: true,
+    });
+  }
 
-    /**
-     * Summarizes the given Markdown text using an Anthropic AI model.
-     * 
-     * This method utilizes the `@anthropic-ai/sdk` to process the given Markdown text,
-     * extracting key information and condensing it into concise bullet points that
-     * capture the main ideas, key steps, or critical information. The AI model should
-     * aim for brevity while retaining the essential meaning of the text.
-     * 
-     * @param originalText - The Markdown text to summarize.
-     * @param model - The model ID of the Anthropic AI to use for summarization.
-     * @param apiKey - The API key for authenticating with the Anthropic AI service.
-     * @returns A promise that resolves to a string containing the summarized text.
-     */
-    static async summarizeText_Anthropic(originalText: string, model: string, apiKey: string): Promise<string> {
-		const anthropic = new Anthropic({
-			apiKey: apiKey,
-			dangerouslyAllowBrowser: true,
-		});
+  async taskOCR(): Promise<string> {
+    const user_prompt = this.getOCRPrompt(modelRoles.user)
+    const system_prompt = this.getOCRPrompt(modelRoles.system);
 
-		const message = await anthropic.messages.create({
-            model: model,
-            max_tokens: 1000,
-            system: `You are an expert research assistant. Here is a Markdown document you will process (wrapped by tag <doc>): \n<doc>${originalText}</doc>`,
-            messages: [
-                {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": AIPrompts.getSummarizeText_Prompt()
-                    }
-                ]
-                }
-            ]
-            });
+    const imageParts: ChatCompletionContentPartImage[] = this.images
+      .filter((image): image is string => typeof image === "string")
+      .map(image => (
+        { 
+          type: 'image_url', 
+          image_url: { 'url': image }
+        }
+      ));
 
-        const mergedText = message.content
-        .flat() // Flatten array if there are nested arrays
-        .filter(item => item.type === "text") // Filter for items with type "text"
-        .map(item => (item as Anthropic.TextBlock).text) // Map to extract "text" values
-        .join(" "); // Join all "text" values into one string
-
-        return mergedText;
-	}
-
-    /**
-     * Converts an image blob to a markdown string using Google's generative AI model.
-     * 
-     * This method utilizes the Google generative AI to process the given image blob,
-     * extracting text and mathematical formulas and converting them into Markdown format.
-     * It leverages a specific AI model identified by the model ID and requires an API key
-     * for authentication.
-     *
-     * @param app - The application instance, used for accessing utilities.
-     * @param blob - The image blob to be converted.
-     * @param model - The model ID of the Google generative AI to use for conversion.
-     * @param apiKey - The API key for authenticating with the Google generative AI service.
-     * @returns A promise that resolves to a string containing the converted markdown text.
-     */
-    static async convertImageToMarkdown_Google(app: App, blob: Blob, model: string, apiKey: string): Promise<string> {
-
-        const image_media_type = 'image/webp';
-        const image_data = await tUtils.getImageData(blob, {
-            maxDimensions: 1000,
-            maxPixels: 1000000,
-            format: 'webp',
-        }, 'Base64');
-
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const geminiModel = genAI.getGenerativeModel({ model: model });
-
-        const prompt = AIPrompts.getImageToMarkdown_Prompt();
-
-        const result = await geminiModel.generateContent([
-            prompt,
+      if (this.model instanceof OpenAI) {
+        const response = await this.model.chat.completions.create({
+          model: this.service.model_id,
+          stream: false,
+          temperature: modelParams['ocr'].temperature,
+          top_p: modelParams['ocr'].top_p,
+          messages: [
             {
-                inlineData: {
-                    data: <string> image_data,
-                    mimeType: image_media_type,
-              },
+              "role": "system",
+              "content": system_prompt,
             },
-          ]);
+            { 
+              role: 'user', 
+              content: [{ type: 'text', text: user_prompt }, ...imageParts], 
+            },
+          ],
+        });
 
-        return result.response.text();
-	}
+        return response.choices?.[0]?.message?.content ?? '';
+      }
+      else {
+        throw new Error(`Model is not an instance of ${this.service.interface}`);
+      }
+  }
 
-    /**
-     * Calls the Google generative AI model to summarize the given Markdown text.
-     * 
-     * This method utilizes the Google generative AI to process the given Markdown text,
-     * extracting key information and condensing it into concise bullet points that
-     * capture the main ideas, key steps, or critical information. The AI model should
-     * aim for brevity while retaining the essential meaning of the text.
-     * 
-     * @param originalText - The Markdown text to summarize.
-     * @param model - The model ID of the Google generative AI to use for summarization.
-     * @param apiKey - The API key for authenticating with the Google generative AI service.
-     * @returns A promise that resolves to a string containing the summarized text.
-     */
-    static async summarizeText_Google(originalText: string, model: string, apiKey: string): Promise<string> {
-        
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const geminiModel = genAI.getGenerativeModel({ model: model });
+  async taskSummarize(originalText: string): Promise<string> {
+    const system_prompt = this.getSummarizePrompt(originalText, modelRoles.system);
 
-        const prompt = `You are an expert research assistant. Here is a Markdown document you will process (wrapped by tag <doc>): \n<doc>${originalText}</doc> \n${AIPrompts.getSummarizeText_Prompt()}`;
-        const result = await geminiModel.generateContent(prompt);
-        
-        return result.response.text();
-	}
+    if (this.model instanceof OpenAI) {
+      const response = await this.model.chat.completions.create({
+        model: this.service.model_id,
+        temperature: modelParams['summarize'].temperature,
+        top_p: modelParams['summarize'].top_p,
+        messages: [
+          {
+            role: 'system',
+            content: system_prompt,
+          },
+          { role: 'user', 
+            content: [{ type: 'text', text: originalText }],
+          },
+        ],
+      });
+    
+      return response.choices?.[0]?.message?.content ?? '';
+    } else {
+      throw new Error(`Model is not an instance of ${this.service.interface}`);
+    }
+    
 
+  }
+}
 
-/**
- * Converts an image blob to a markdown string using the Mistral AI model.
- * 
- * This method utilizes the Mistral AI to process the given image blob,
- * extracting text and mathematical formulas and converting them into Markdown format.
- * It leverages a specific AI model identified by the model ID and requires an API key
- * for authentication.
- *
- * @param app - The application instance, used for accessing utilities.
- * @param blob - The image blob to be converted.
- * @param model - The model ID of the Mistral AI to use for conversion.
- * @param apiKey - The API key for authenticating with the Mistral AI service.
- * @returns A promise that resolves to a string containing the converted markdown text.
- */
-    static async convertImageToMarkdown_Mistral(app: App, blob: Blob, model: string, apiKey: string): Promise<string> {
+export class Mmllm_OpenAI extends Mmllm implements IMmllm {
 
-        const client = new Mistral({apiKey: apiKey});
+  imageSpecs: imageSpecs = {
+    maxDimensions: 1000,
+    maxPixels: 1000000,
+    format: 'webp',
+    mimeType: 'image/webp',
+    outputType: 'DataURL'
+  };
 
-        const image_media_type = 'image/webp';
-        const image_data = await tUtils.getImageData(blob, {
-            maxDimensions: 1000,
-            maxPixels: 1000000,
-            format: 'webp',
-        }, 'DataURL');
+  constructor(mmllmService: AIModel, apiKey: string, app: App | undefined = undefined) {
+    super(mmllmService, apiKey, app);
+  }
 
-        const chatResponse = await client.chat.complete({
-            model: model,
-            messages: [
-              {
-                role: "user",
-                content: [
-                  { type: "text", text: AIPrompts.getImageToMarkdown_Prompt() },
-                  {
-                    type: "image_url",
-                    imageUrl: <string> image_data,
-                  },
-                ],
-              },
+  init(): void {
+    // Add your initialization logic here
+    this.model = new OpenAI({
+      apiKey: this.apiKey,
+      dangerouslyAllowBrowser: true,
+    });
+  }
+
+  async taskOCR(): Promise<string> {
+    const user_prompt = this.getOCRPrompt(modelRoles.user)
+    const system_prompt = this.getOCRPrompt(modelRoles.system);
+
+    const imageParts: ChatCompletionContentPartImage[] = this.images
+      .filter((image): image is string => typeof image === "string")
+      .map(image => (
+        { 
+          type: 'image_url', 
+          image_url: { 'url': image }
+        }
+      ));
+
+      if (this.model instanceof OpenAI) {
+        const response = await this.model.chat.completions.create({
+          model: this.service.model_id,
+          stream: false,
+          temperature: modelParams['ocr'].temperature,
+          top_p: modelParams['ocr'].top_p,
+          messages: [
+            {
+              "role": "system",
+              "content": system_prompt,
+            },
+            { 
+              role: 'user', 
+              content: [{ type: 'text', text: user_prompt }, ...imageParts], 
+            },
+          ],
+        });
+
+        return response.choices?.[0]?.message?.content ?? '';
+      }
+      else {
+        throw new Error(`Model is not an instance of ${this.service.interface}`);
+      }
+  }
+
+  async taskSummarize(originalText: string): Promise<string> {
+    const system_prompt = this.getSummarizePrompt(originalText, modelRoles.system);
+
+    if (this.model instanceof OpenAI) {
+      const response = await this.model.chat.completions.create({
+        model: this.service.model_id,
+        temperature: modelParams['summarize'].temperature,
+        top_p: modelParams['summarize'].top_p,
+        messages: [
+          {
+            role: 'system',
+            content: system_prompt,
+          },
+          { role: 'user', 
+            content: [{ type: 'text', text: originalText }],
+          },
+        ],
+      });
+    
+      return response.choices?.[0]?.message?.content ?? '';
+    } else {
+      throw new Error(`Model is not an instance of ${this.service.interface}`);
+    }
+    
+
+  }
+}
+
+export class Mmllm_Anthropic extends Mmllm implements IMmllm {
+
+  imageSpecs: imageSpecs = {
+    maxDimensions: 1000,
+    maxPixels: 1000000,
+    format: 'webp',
+    mimeType: 'image/webp',
+    outputType: 'Base64'
+  };
+
+  constructor(mmllmService: AIModel, apiKey: string, app: App | undefined = undefined) {
+    super(mmllmService, apiKey, app);
+  }
+
+  init(): void {
+    // Add your initialization logic here
+    this.model = new Anthropic({
+			apiKey: this.apiKey,
+			dangerouslyAllowBrowser: true,
+		});
+  }
+
+  async taskOCR(): Promise<string> {
+    const user_prompt = this.getOCRPrompt(modelRoles.user);
+    const system_prompt = this.getOCRPrompt(modelRoles.system);
+
+    // images
+    const imageParts: ImageBlockParam[] = this.images
+      .filter((image): image is string => typeof image === "string")
+      .map(image => (
+        { 
+          'type': 'image', 
+          'source': {
+            'type': 'base64',
+            'media_type': this.imageSpecs.mimeType,
+            'data': <string> image
+          }
+        }
+      ));
+    
+    if (this.model instanceof Anthropic) {
+      const response = await this.model.messages.create({
+        model: this.service.model_id,
+        max_tokens: 1000,
+        system: system_prompt,
+        temperature: modelParams['ocr'].temperature,
+        top_p: modelParams['ocr'].top_p,
+        messages: [
+            {
+            "role": "user",
+            "content": [
+                ...imageParts,
+                { "type": "text", "text": user_prompt }
+            ]
+            }
+        ]
+        });
+      
+        return response.content
+        .reduce((acc: string[], item) => {
+          if (item.type === "text") acc.push((item as Anthropic.TextBlock).text);
+          return acc;
+        }, [])
+        .join(" ");
+    } else {
+      throw new Error(`Model is not an instance of ${this.service.interface}`);
+    }
+
+  }
+
+  async taskSummarize(originalText: string): Promise<string> {
+    const user_prompt = this.getSummarizePrompt(originalText, modelRoles.user);
+    const system_prompt = this.getSummarizePrompt(originalText, modelRoles.system);
+
+    if (this.model instanceof Anthropic) {
+      const response = await this.model.messages.create({
+        model: this.service.model_id,
+        max_tokens: 1000,
+        system: system_prompt,
+        temperature: modelParams['summarize'].temperature,
+        top_p: modelParams['summarize'].top_p,
+        messages: [
+            {
+            "role": "user",
+            "content": [
+                { "type": "text", "text": user_prompt }
+            ]
+            }
+        ]
+        });
+
+      return response.content
+        .reduce((acc: string[], item) => {
+          if (item.type === "text") acc.push((item as Anthropic.TextBlock).text);
+          return acc;
+        }, [])
+        .join(" ");
+    } else {
+      throw new Error(`Model is not an instance of ${this.service.interface}`);
+    }
+    
+
+  }
+}
+
+export class Mmllm_Mistral extends Mmllm implements IMmllm {
+
+  imageSpecs: imageSpecs = {
+    maxDimensions: 1000,
+    maxPixels: 1000000,
+    format: 'webp',
+    mimeType: 'image/webp',
+    outputType: 'DataURL'
+  };
+
+  constructor(mmllmService: AIModel, apiKey: string, app: App | undefined = undefined) {
+    super(mmllmService, apiKey, app);
+  }
+
+  init(): void {
+    // Add your initialization logic here
+    this.model = new Mistral({
+      apiKey: this.apiKey
+    });
+  }
+
+  async taskOCR(): Promise<string> {
+    const user_prompt = this.getOCRPrompt(modelRoles.user);
+    const system_prompt = this.getOCRPrompt(modelRoles.system);
+
+    // images
+    const imageParts: ContentChunk[] = this.images
+      .filter((image): image is string => typeof image === "string")
+      .map(image => (
+        { 
+          type: 'image_url', 
+          imageUrl: <string> image,
+        }
+      ));
+    
+    if (this.model instanceof Mistral) {
+      const response = await this.model.chat.complete({
+        model: this.service.model_id,
+        temperature: modelParams['ocr'].temperature,
+        topP: modelParams['ocr'].top_p,
+        messages: [
+          {
+            role: 'system',
+            content: system_prompt,
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: user_prompt },
+              ...imageParts,
             ],
-          });
+          },
+        ],
+      });
 
-        if ('choices' in chatResponse && chatResponse.choices) {
-            return String(chatResponse.choices[0]?.message?.content);
-        } else {
-            // handle the case where chatResponse.choices is undefined
-            return '';
-        }
-	}
+      return response.choices?.[0]?.message?.content ?? '';
+    } else {
+      throw new Error(`Model is not an instance of ${this.service.interface}`);
+    }
 
-    /**
-     * Calls the Mistral AI model to summarize the given Markdown text.
-     * @param originalText - The Markdown text to summarize.
-     * @param model - The model ID of the Mistral AI to use for summarization.
-     * @param apiKey - The API key for the Mistral AI service.
-     * @returns A promise that resolves to a Markdown string containing the summarized text.
-     */
-    static async summarizeText_Mistral(originalText: string, model: string, apiKey: string): Promise<string> {
-        const client = new Mistral({apiKey: apiKey});
+  }
 
-        const prompt = `You are an expert research assistant. Here is a Markdown document you will process (wrapped by tag <doc>): \n<doc>${originalText}</doc> \n${AIPrompts.getSummarizeText_Prompt()}`;
+  async taskSummarize(originalText: string): Promise<string> {
+    const user_prompt = this.getSummarizePrompt(originalText, modelRoles.user);
 
-        const chatResponse = await client.chat.complete({
-            model: model,
-            messages: [
-              {
-                role: "user",
-                content: [
-                  { type: "text", text: prompt },
-                ],
-              },
+    if (this.model instanceof Mistral) {
+      const response = await this.model.chat.complete({
+        model: this.service.model_id,
+        temperature: modelParams['summarize'].temperature,
+        topP: modelParams['summarize'].top_p,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: user_prompt },
             ],
-          });
+          },
+        ],
+      });
 
-        if ('choices' in chatResponse && chatResponse.choices) {
-            return String(chatResponse.choices[0]?.message?.content);
-        } else {
-            // handle the case where chatResponse.choices is undefined
-            return '';
-        }
-	}
+      return response.choices?.[0]?.message?.content ?? '';
+    } else {
+      throw new Error(`Model is not an instance of ${this.service.interface}`);
+    }
+    
 
-    static async convertImageToMarkdown_TogetherAI(app: App, blob: Blob, model: string, apiKey: string): Promise<string> {
-        const client = new OpenAI({
-            apiKey: apiKey,
-            baseURL: "https://api.together.xyz/v1",
-            dangerouslyAllowBrowser: true,
-          });
-
-        // const image_media_type = 'image/webp';
-        const image_data = await tUtils.getImageData(blob, {
-            maxDimensions: 1000,
-            maxPixels: 1000000,
-            format: 'webp',
-        }, 'DataURL');
-
-        let prompt: string;
-
-        if(model.toLowerCase().includes('llama')) {
-          prompt = AIPrompts.getImageToMarkdown_Prompt(AIPromptsForceMode.Llama);
-        } else {
-          prompt = AIPrompts.getImageToMarkdown_Prompt();
-        }
-
-        console.log(prompt);
-
-        const response = await client.chat.completions.create({
-            model: model,
-            // temperature: 0.2,
-            stream: false,
-            messages: [
-              { role: 'user', content: [
-                { type: 'text', text: prompt },
-                { type: 'image_url', image_url: { url: <string> image_data } }
-              ] },
-            ],
-          });
-
-        if ('choices' in response && response.choices) {
-            return String(response.choices[0]?.message?.content);
-        } else {
-            // handle the case where chatResponse.choices is undefined
-            return '';
-        }
-	}
-
-    /**
-     * Calls the Mistral AI model to summarize the given Markdown text.
-     * @param originalText - The Markdown text to summarize.
-     * @param model - The model ID of the Mistral AI to use for summarization.
-     * @param apiKey - The API key for the Mistral AI service.
-     * @returns A promise that resolves to a Markdown string containing the summarized text.
-     */
-    static async summarizeText_TogetherAI(originalText: string, model: string, apiKey: string): Promise<string> {
-        const client = new OpenAI({
-            apiKey: apiKey,
-            baseURL: "https://api.together.xyz/v1",
-            dangerouslyAllowBrowser: true,
-          });
-
-        const prompt = `You are an expert research assistant. Here is a Markdown document you will process (wrapped by tag <doc>): \n<doc>${originalText}</doc> \n${AIPrompts.getSummarizeText_Prompt()}`;
-
-        const response = await client.chat.completions.create({
-            model: model,
-            messages: [
-              { role: 'user', content: [
-                { type: 'text', text: prompt },
-              ] },
-            ],
-          });
-
-        if ('choices' in response && response.choices) {
-            return String(response.choices[0]?.message?.content);
-        } else {
-            // handle the case where chatResponse.choices is undefined
-            return '';
-        }
-	}
-
+  }
 }
