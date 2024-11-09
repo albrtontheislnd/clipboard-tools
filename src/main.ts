@@ -354,7 +354,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			.map(async (item) => {
 				const blob = await item.getType("image/png");
 
-				let resultText = 'blah blah blah'; //await this.convertImageToMarkdown(blob);
+				let resultText = await this.convertImageToMarkdown(blob);
 				if(resultText === null) resultText = `Error in interacting with AI model: ${this.settings?.aiModel}`;
 
 				const modal = new ImageTextModal(this.app, {
