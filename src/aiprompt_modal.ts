@@ -11,10 +11,14 @@ export type ImageTextModalInputArgs = {
 
 export class ImageTextModal extends Modal {
 	vueApp: vueApp<Element> | null = null;
-
 	private returnValue: callbackValue  = null;
 	inputValue: ImageTextModalInputArgs;
 	
+	/**
+	 * Constructor for the ImageTextModal class.
+	 * @param app - The Obsidian app instance.
+	 * @param args - The input arguments containing the image source and the result text.
+	 */
 	constructor(app: App, args: ImageTextModalInputArgs) {
 		super(app);
 		this.inputValue = {
@@ -23,116 +27,41 @@ export class ImageTextModal extends Modal {
 		};
 	}
 
+	/**
+	 * Opens the modal and returns a promise that resolves to the value returned by the modal.
+	 * The promise resolves to null if the modal is closed without a result.
+	 * The modal is automatically closed when the promise resolves.
+	 * @returns A promise that resolves to the value returned by the modal.
+	 */
 	async openWithPromise(): Promise<callbackValue> {
 		return new Promise((resolve) => {
-			this.onOpenModal(resolve);
+			this.onOpenModal();
 			this.onClose = () => {
 				this.vueApp?.unmount();
-				const { contentEl } = this;
-				contentEl.empty();
+				this.contentEl.empty();
 				resolve(this.returnValue);
 			};
 			this.open();
 		});
 	}
 
+
 	/**
-	 * @description
-	 * This private method is called right after the modal is opened.
-	 * It sets up the content of the modal, and defines the behavior of the cancel and insert buttons.
-	 * The method takes a callback which is called when the user closes the modal.
-	 * The callback is called with `null` if the user cancels the modal,
-	 * and with an object with two properties if the user confirms the modal:
-	 * - `includeImage`: A boolean indicating whether the image should be included in the markdown file.
-	 * - `textContent`: A string containing the text content of the textarea.
-	 * @param _resolve - A callback which is called when the user closes the modal.
+	 * Mounts the Vue app to the container element and sets up the promise resolve callbacks.
+	 * @param _resolve - The promise resolve callback.
+	 * @private
 	 */
-	private onOpenModal(_resolve: (result: callbackValue) => void) {
-		//const { contentEl } = this;
-
-		// @ts-ignore
-		const handleDataFromChild = (data: callbackValue) => {
-			this.returnValue = data;
-			this.close();
-		  };
-
-		// Mount the Vue component, passing `close` as a prop
+	private onOpenModal() {
 		this.vueApp = createApp(ImageToMarkdown, {
-			close: () => this.close()
-		});
-		this.vueApp.mount(this.containerEl.children[1]);
-
-/* 		this.root.render(
-			<AppContext.Provider value={this.app}>
-			  <ImageToMarkdown onData={handleDataFromChild} values={this.inputValue} />
-			</AppContext.Provider>
-		  ); */
-
-/*         this.blobURL = URL.createObjectURL(this.imageSrc);
-
-		// 1. HTML Image Element
-		if (this.imageSrc) {
-			const image = contentEl.createEl('img', {
-				attr: { src: this.blobURL },
-				cls: 'modal-image',
-			});
-            image.onload = () => {
-                URL.revokeObjectURL(this.blobURL);
-            };
-		}
-
-		// 2. Textarea Element
-		this.textarea = contentEl.createEl('code', {
-			cls: 'modal-textarea',
-			attr: { contenteditable: 'true', spellcheck: 'false' },
-		});
-        this.textarea.innerText = this.resultText;
-
-		// 3. Checkbox for Including Image
-		const checkboxContainer = contentEl.createDiv({ cls: 'modal-checkbox' });
-		this.checkbox = checkboxContainer.createEl('input', { attr: { type: 'checkbox', 'id': 'checkbox_confirm' } });
-		checkboxContainer.createEl('label', { text: 'Include the image', attr: { 'for': 'checkbox_confirm' }  });
-
-		// 4. Cancel Button
-		const cancelButton = new ButtonComponent(contentEl);
-		cancelButton.setButtonText('Cancel')
-			.onClick(() => {
+			close: () => this.close(),
+			insertData: (data: callbackValue) => {
+				this.returnValue = data;
 				this.close();
-                resolve(null); // Resolves with null if user cancels
-			});
+			},
+			values: this.inputValue,
+		});
 
-		// 5. Insert Button
-		const insertButton = new ButtonComponent(contentEl);
-		insertButton.setButtonText('Insert')
-			.onClick(() => {
-                this.close();
-                resolve({
-					includeImage: this.checkbox.checked,
-					textContent: this.textarea.innerText
-				}); // Resolves with data if user confirms
-			});
-
-        const style = document.createElement('style');
-        style.textContent = `
-
-            .modal-image {
-				max-width: 100%;
-				max-height: 100%;
-				width: auto;
-				height: auto;
-            }
-
-            .modal-textarea {
-				width: 100%;
-				height: 200px;
-				display: block;
-				box-sizing: border-box;
-				background-color: #f5f5f5;
-				font-family: monospace;
-				overflow: auto;
-            }
-        `;
-        document.head.appendChild(style); */
+		this.vueApp.mount(this.containerEl.children[1]);
 	}
 }
 

@@ -33,12 +33,12 @@ coverage
 *.iml
 .idea
 
+# obsidian
 # Don't include the compiled main.js file in the repo.
 # They should be uploaded to GitHub releases instead.
 main.js
+styles.css
+data.json
 
 # Exclude sourcemaps
 *.map
-
-# obsidian
-data.json

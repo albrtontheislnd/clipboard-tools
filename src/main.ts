@@ -360,6 +360,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 				const modal = new ImageTextModal(this.app, {
 					imageSrc: blob, resultText: resultText
 				});
+				
 				const result = await modal.openWithPromise();
 
 				if(result !== null) {
