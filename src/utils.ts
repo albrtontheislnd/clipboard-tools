@@ -3,7 +3,8 @@ import { promises as fs } from "fs";
 import { App, FileSystemAdapter, TFile, Platform } from "obsidian";
 import * as path from "path";
 import { tSecureString } from "./secure";
-import { ImgOptimizerPluginSettings } from "./interfaces";
+import { AIModelSetting, ImgOptimizerPluginSettings } from "./interfaces";
+import { ConfigValues } from "./settings";
 
 
 /**
@@ -267,10 +268,10 @@ export class tUtils {
 		}
 	}
 
-	static async encodeRawApiKey(originalApiKey: string, app: App, settings: ImgOptimizerPluginSettings): Promise<string> {
+	static async encodeRawApiKey(originalApiKey: string, settingKey: string, app: App, _settings: ImgOptimizerPluginSettings): Promise<string> {
 		originalApiKey = originalApiKey.trim();
 		const p = tUtils.getAbsoluteVaultPath(app)?.toString() ?? '';
-		const s = settings.aiModel;
+		const s = settingKey;
 		
 		try {
 			const v = await tSecureString.encrypt(originalApiKey, p, s);
@@ -284,4 +285,25 @@ export class tUtils {
 		const [firstPart, ...rest] = input.split(separator);
 		return rest.length > 0 ? [firstPart, rest.join("/")] : [undefined, undefined];
 	  }
+
+	static async generateApiKeyFields(settings: ImgOptimizerPluginSettings, app: App): Promise<AIModelSetting[]> {
+		const apiKeysFields: AIModelSetting[] = [];
+
+		for (const item of ConfigValues.aiModels) {
+			const settingKey = `${item.platform_id}/${item.model_id}`;
+			const rawApiKey = await tUtils.getRawApiKey(settingKey, app, settings);
+
+			apiKeysFields.push({
+				...item,
+				settingKey: settingKey,
+				rawApiKey: rawApiKey,
+			});
+		  }
+
+		// sort
+		apiKeysFields.sort((a, b) => a.settingKey.localeCompare(b.settingKey));
+
+
+		return apiKeysFields;
+	}
  }

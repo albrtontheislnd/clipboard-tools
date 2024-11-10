@@ -1,7 +1,11 @@
-import { App, Modal, PluginSettingTab, Setting, TextComponent } from "obsidian";
+import { App, Modal, PluginSettingTab, Setting } from "obsidian";
 import ImgWebpOptimizerPlugin from "./main";
-import { ImgOptimizerPluginSettings, AIModel } from "./interfaces";
+import { ImgOptimizerPluginSettings, AIModel, AIModelSetting, AIModelSetting_Result } from "./interfaces";
 import { tUtils } from "./utils";
+import { createApp } from 'vue';
+import { App as vueApp } from 'vue';
+import APIKeysEditor from './components/APIKeysEditor.vue';
+
 
 export const DEFAULT_SETTINGS: Partial<ImgOptimizerPluginSettings> = {
 	imageFormat: 'webp',
@@ -68,9 +72,7 @@ return acc;
 }, {} as Record<string, string>);
 
 export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
-	plugin: ImgWebpOptimizerPlugin;
-	apiKey_Field: TextComponent | null;
-  
+	plugin: ImgWebpOptimizerPlugin;  
 	/**
 	 * Creates an instance of the ImgOptimizerPluginSettingsTab class.
 	 * @param app - The Obsidian app instance.
@@ -79,7 +81,6 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 	constructor(app: App, plugin: ImgWebpOptimizerPlugin) {
 	  super(app, plugin);
 	  this.plugin = plugin;
-	  this.apiKey_Field = null;
 	}
   
 	/**
@@ -155,47 +156,40 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 			.setValue(this.plugin.settings.aiModel)
 			.onChange(async (value: string) => {
 				// validation
-				if(this.apiKey_Field !== null) {
-					// @ts-ignore
+				if(this.plugin.settings) {
 					this.plugin.settings.aiModel = value;
-					// @ts-ignore
-					this.apiKey_Field.setValue(await tUtils.getRawApiKey(this.plugin.settings.aiModel, this.app, this.plugin.settings));
 					await this.plugin.saveSettings();
 				}
 			})
 		);
 
+		// Create a setting with a button
 		new Setting(containerEl)
-		.setName('AI Model API Key Editor')
-		.setDesc('Select a model to view/edit its associated API Key.')
-		.addText((text) => {
-				this.apiKey_Field = text;
-				text
-				.setPlaceholder('select a model...')
-				.onChange(async (value) => {
+		.setName('AI Models - API Key Editor')
+		.setDesc("Click the button to open API Key Editor.")
+		.addButton((btn) => 
+			btn
+			.setButtonText("API Key Editor")
+			.setCta()
+			.onClick(async () => {
+				if (this.plugin.settings) {
+					const ed = new APIKeysEditorModal(this.app, this.plugin.settings);
+					const apiKeys: AIModelSetting_Result = await ed.openWithPromise();
+
+					if(apiKeys.action == 'save') {
 					try {
-						const h = await tUtils.encodeRawApiKey(value, this.app, this.plugin.settings as ImgOptimizerPluginSettings);
-						// @ts-ignore
-						this.plugin.settings.aiModelAPIKeys[this.plugin.settings.aiModel] = h;
+						for (const item of apiKeys.values) {
+							const h = await tUtils.encodeRawApiKey(item.rawApiKey, item.settingKey, this.app, this.plugin.settings as ImgOptimizerPluginSettings);
+							this.plugin.settings.aiModelAPIKeys[item.settingKey] = h;
+						}
 						await this.plugin.saveSettings();
 					} catch (error) {
 						console.log(error);
 					}
-				});
-				// end.
-			}
-		);
-
-		// Create a setting with a button
-		new Setting(containerEl)
-		.setName("Open Modal")
-		.setDesc("Click the button to open a modal dialog.")
-		.addButton((btn) => 
-			btn
-			.setButtonText("Open Modal")
-			.setCta()
-			.onClick(() => {
-				new ExampleModal(this.app).open();
+					}
+				  } else {
+					console.error('Plugin settings are not defined');
+				  }
 			})
 		);
 
@@ -203,18 +197,60 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
   }
 
 // Custom Modal
-class ExampleModal extends Modal {
-	constructor(app: App) {
+class APIKeysEditorModal extends Modal {
+	private vueApp: vueApp<Element> | null = null;
+	private inputValue: AIModelSetting[] = [];
+	private action: 'cancel' | 'save' = 'cancel';
+	private settings: ImgOptimizerPluginSettings | undefined = undefined;
+	constructor(app: App, settings: ImgOptimizerPluginSettings) {
 	  super(app);
+	  this.settings = settings;
 	}
-  
-	onOpen() {
-	  const { contentEl } = this;
-	  contentEl.setText("This is an example modal opened from the settings tab.");
+
+	async openWithPromise(): Promise<AIModelSetting_Result> {
+		const p = new Promise<AIModelSetting_Result>((resolve) => {
+			this.onClose = () => {
+				resolve({
+					action: this.action,
+					values: this.inputValue,
+				});
+				this.vueApp?.unmount();
+				this.contentEl.empty();
+			};
+		});
+
+		if (this.settings) {
+			this.inputValue = await tUtils.generateApiKeyFields(this.settings, this.app);
+		} else {
+			// handle the case where this.settings is undefined
+			this.inputValue = [];
+		}
+
+		this.openModal();
+		return p;
 	}
-  
-	onClose() {
-	  const { contentEl } = this;
-	  contentEl.empty();
+
+	private openModal() {
+		if (!this.vueApp) {
+			this.vueApp = createApp(APIKeysEditor, {
+				close: this.close.bind(this),
+				updateSettings: (data: AIModelSetting[], action: 'save' | 'cancel') => {
+					console.log(action);
+					if(action == 'save') {
+						this.inputValue = data;
+						this.action = 'save';
+					} else {
+						this.inputValue = [];
+						this.action = 'cancel';
+					}
+					
+					this.close();
+				},
+				values: this.inputValue,
+			});
+			this.vueApp.mount(this.containerEl.children[1]);
+		}
+
+		this.open();
 	}
   }
