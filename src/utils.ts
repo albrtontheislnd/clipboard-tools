@@ -87,7 +87,6 @@ export class tUtils {
 			default:
 				// not a valid app
 				return { stdout: '', stderr: '', result: false };
-				break;
 		}
 
 		try {

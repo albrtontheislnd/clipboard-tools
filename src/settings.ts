@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, TextComponent } from "obsidian";
+import { App, Modal, PluginSettingTab, Setting, TextComponent } from "obsidian";
 import ImgWebpOptimizerPlugin from "./main";
 import { ImgOptimizerPluginSettings, AIModel } from "./interfaces";
 import { tUtils } from "./utils";
@@ -186,5 +186,35 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 			}
 		);
 
+		// Create a setting with a button
+		new Setting(containerEl)
+		.setName("Open Modal")
+		.setDesc("Click the button to open a modal dialog.")
+		.addButton((btn) => 
+			btn
+			.setButtonText("Open Modal")
+			.setCta()
+			.onClick(() => {
+				new ExampleModal(this.app).open();
+			})
+		);
+
+	}
+  }
+
+// Custom Modal
+class ExampleModal extends Modal {
+	constructor(app: App) {
+	  super(app);
+	}
+  
+	onOpen() {
+	  const { contentEl } = this;
+	  contentEl.setText("This is an example modal opened from the settings tab.");
+	}
+  
+	onClose() {
+	  const { contentEl } = this;
+	  contentEl.empty();
 	}
   }

@@ -26,6 +26,11 @@ export interface AIModel {
 	interface: string;
 }
 
+export interface AIModelSetting extends AIModel {
+	settingKey: string;
+	rawApiKey: string;
+  }
+
 export const stringOrEmptySchema = z.union([
 	z.string().transform((val) => val), // If it's a string, return it as is
 	z.number().transform((val) => val.toString()), // If it's a number, convert to string
