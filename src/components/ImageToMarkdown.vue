@@ -16,7 +16,6 @@ imageUrl.value = URL.createObjectURL(props.values.imageSrc);
 
 const handleImageLoad = () => {
   URL.revokeObjectURL(imageUrl.value);
-  //console.log(`Image memory was released.`);
 };
 
 const handleCancel = () => {

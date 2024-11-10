@@ -32,6 +32,7 @@ export default defineConfig({
   build: {
     outDir: '.',
     cssCodeSplit: false, // Disable CSS extraction
+    cssMinify: true,
     emptyOutDir: false,
     lib: {
       entry: 'src/main.ts',

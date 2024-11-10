@@ -1,7 +1,7 @@
 import { Editor, FileSystemAdapter, MarkdownFileInfo, MarkdownView, Notice, Plugin, TFile } from 'obsidian';
 import { tUtils } from './utils';
 import { ConfigValues, DEFAULT_SETTINGS, ImgOptimizerPluginSettingsTab } from './settings';
-import { AIModel, ImageFileObject, ImgOptimizerPluginSettings } from './interfaces';
+import { AIModel, ImageFileObject, ImgOptimizerPluginSettings, stringOrEmptySchema } from './interfaces';
 import { ImageTextModal } from './aiprompt_modal';
 import { createModelInstance } from './aiprompt';
 
@@ -40,7 +40,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			name: 'Convert clipboard image to Markdown/Latex',
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
 				if (view instanceof MarkdownView) {
-					await this.handleMultiModalAI(editor, view);
+					await this.handleOCR(editor, view);
 				  } else {
 					// Handle the case where ctx is a MarkdownFileInfo
 				  }	
@@ -52,7 +52,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			name: 'Summarize text',
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
 				if (view instanceof MarkdownView) {
-					await this.summarizeSelectedText(editor);
+					await this.handleSummarize(editor);
 				  } else {
 					// Handle the case where ctx is a MarkdownFileInfo
 				  }	
@@ -71,19 +71,16 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 
 					menu.addItem((item) => {
 						item.setTitle(`Clipboard: Convert to Markdown`).setIcon('brain-circuit')
-							.onClick(async () => await this.handleMultiModalAI(editor, view));
+							.onClick(async () => await this.handleOCR(editor, view));
 					});
 
 					menu.addItem((item) => {
 						item.setTitle(`Clipboard: Summarize text`).setIcon('clipboard-pen-line')
-							.onClick(async () => await this.summarizeSelectedText(editor));
+							.onClick(async () => await this.handleSummarize(editor));
 					});
 				}
 			})
 		);
-	}
-
-	onunload() {
 	}
 
 	/**
@@ -230,49 +227,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		return null;
 	}
 
-	/**
-	 * Handles the conversion and embedding of images from the clipboard into the markdown editor.
-	 * 
-	 * This method reads image data from the clipboard, converts each image to the preferred format
-	 * using the `convertWrapper` function, and embeds the resulting image file into the current
-	 * markdown editor session. It displays notifications based on the conversion process.
-	 * 
-	 * If the image conversion is already in progress, or if the clipboard is empty, it notifies the user
-	 * and exits early.
-	 * 
-	 * @param editor - The markdown editor where the image will be embedded.
-	 * @param _view - The markdown view associated with the editor.
-	 */
-    async handleClipboardImage(editor: Editor, _view: MarkdownView) {
-		const clipboardItems = await navigator.clipboard.read();
 
-		if(this.locked) {
-			new Notice(`Image Conversion in Progress: Please hold on for a moment`);
-			return;
-		} else if(!clipboardItems) {
-			new Notice(`Clipboard is empty`);
-			return;
-		}
-
-		const promises = clipboardItems
-			.filter(item => item.types.includes("image/png"))
-			.map(async (item) => {
-				const blob = await item.getType("image/png");
-				const filePath = await this.convertWrapper(blob);
-
-				if(filePath !== null) {
-					// Embed the image in the current markdown file
-					const embedMarkdown = `![[${filePath}]]`;
-					editor.replaceSelection(embedMarkdown);
-					
-					new Notice(`Image saved as ${filePath}`);
-				}
-			});
-
-		this.locked = true;
-		await Promise.all(promises);
-		this.locked = false;
-    }
 
 	/**
 	 * Return the AI model instance and its API key from the settings.
@@ -310,7 +265,6 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		}
 
 		let resultText = '';
-		// logic
 		try {
 			const modelInstance = createModelInstance(aiModel, aiModel_APIKey, this.app);
 			modelInstance.init();
@@ -322,8 +276,38 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		}
 
 		return resultText;
-		// end: logic		
     }
+
+
+
+	async insertContent(editor: Editor, _filePath: any = undefined, _textContent: any = undefined, _cursor: "from" | "to" | "head" | "anchor" | null = null): Promise<void> {
+		// Parse both inputs at once to avoid multiple schema validations
+		const [filePath, textContent] = await Promise.all([
+			stringOrEmptySchema.parse(_filePath),
+			stringOrEmptySchema.parse(_textContent)
+		]);
+	
+		let content = '';
+		
+		if (filePath.length > 0) {
+			content += `\n![[${filePath}]]\n`;
+			new Notice(`Image saved as ${filePath}`);
+		}
+	
+		if (textContent.length > 0) {
+			content += `\n${textContent}\n`;
+		}
+	
+		// Single editor operation instead of multiple
+		if (content) {
+			if(_cursor === null) {
+				editor.replaceSelection(content);
+			} else {
+				editor.replaceRange(content, editor.getCursor(_cursor));
+			}
+			
+		}
+	}
 
 	/**
 	 * Handles the conversion of images from the clipboard to markdown using AI models.
@@ -338,7 +322,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	 * @param editor - The markdown editor where the image and text will be embedded.
 	 * @param _view - The markdown view associated with the editor.
 	 */
-    async handleMultiModalAI(editor: Editor, _view: MarkdownView) {
+    async handleOCR(editor: Editor, _view: MarkdownView) {
 		const clipboardItems = await navigator.clipboard.read();
 
 		if(this.locked) {
@@ -353,27 +337,18 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			.filter(item => item.types.includes("image/png"))
 			.map(async (item) => {
 				const blob = await item.getType("image/png");
-
-				let resultText = await this.convertImageToMarkdown(blob);
-				if(resultText === null) resultText = `Error in interacting with AI model: ${this.settings?.aiModel}`;
+				const resultText = await this.convertImageToMarkdown(blob);
 
 				const modal = new ImageTextModal(this.app, {
-					imageSrc: blob, resultText: resultText
+					imageSrc: blob, 
+					resultText: (resultText === null) ? `Error in interacting with AI model: ${this.settings?.aiModel}` : resultText,
 				});
 				
 				const result = await modal.openWithPromise();
 
-				if(result !== null) {
-					if(result.includeImage === true) {
-						const filePath = await this.convertWrapper(blob);
-
-						if(filePath !== null) {
-							const embedMarkdown = `![[${filePath}]]`; // Embed the image in the current markdown file
-							editor.replaceSelection(`\n${embedMarkdown}\n`);
-							new Notice(`Image saved as ${filePath}`);
-						}
-					}
-					editor.replaceSelection(`\n${result.textContent}\n`);
+				if (result) { // Simplified null check
+					const filePath = result.includeImage ? await this.convertWrapper(blob) : null; // Combined conditional assignment
+					await this.insertContent(editor, filePath, result.textContent);
 				}
 			});
 
@@ -396,7 +371,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	 * 
 	 * @param editor - The markdown editor where the text will be inserted.
 	 */
-	async summarizeSelectedText(editor: Editor) {
+	async handleSummarize(editor: Editor) {
 		const { aiModel, aiModel_APIKey } = await this.obtainAIModelInfo();
 		const selectedText = editor.getSelection().trim();
 
@@ -420,19 +395,52 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 
 		this.locked = true;
 		let resultText = '';
-		// logic
 		try {
 			const modelInstance = createModelInstance(aiModel, aiModel_APIKey, this.app);
 			modelInstance.init();
 			resultText = await modelInstance.taskSummarize(selectedText);
 		} catch (error) {
-			console.log(error);
 			resultText = `Error in calling AI Model: ${aiModel.model_id}.\n${error}`;
 		}
-		// end: logic
 
 		// Insert the returned text below the original selection
-		editor.replaceRange(`\n${resultText}`, editor.getCursor('to')); // Get the end position of the selection
+		await this.insertContent(editor, null, resultText, "to");
 		this.locked = false;
 	}
+
+	/**
+	 * Handles the conversion and embedding of images from the clipboard into the markdown editor.
+	 * 
+	 * This method reads image data from the clipboard, converts each image to the preferred format
+	 * using the `convertWrapper` function, and embeds the resulting image file into the current
+	 * markdown editor session. It displays notifications based on the conversion process.
+	 * 
+	 * If the image conversion is already in progress, or if the clipboard is empty, it notifies the user
+	 * and exits early.
+	 * 
+	 * @param editor - The markdown editor where the image will be embedded.
+	 * @param _view - The markdown view associated with the editor.
+	 */
+    async handleClipboardImage(editor: Editor, _view: MarkdownView) {
+		const clipboardItems = (await navigator.clipboard.read()).filter(item => item.types.includes("image/png"));
+
+		if(this.locked) {
+			new Notice(`Image Conversion in Progress: Please hold on for a moment`);
+			return;
+		} else if(clipboardItems.length == 0) {
+			new Notice(`Clipboard is empty`);
+			return;
+		}
+
+		const promises = clipboardItems
+			.map(async (item) => {
+				const blob = await item.getType("image/png");
+				const filePath = await this.convertWrapper(blob);
+				await this.insertContent(editor, filePath);
+			});
+
+		this.locked = true;
+		await Promise.all(promises);
+		this.locked = false;
+    }
 }

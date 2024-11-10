@@ -10,9 +10,9 @@ export type ImageTextModalInputArgs = {
 };
 
 export class ImageTextModal extends Modal {
-	vueApp: vueApp<Element> | null = null;
+	private vueApp: vueApp<Element> | null = null;
 	private returnValue: callbackValue  = null;
-	inputValue: ImageTextModalInputArgs;
+	private inputValue: ImageTextModalInputArgs;
 	
 	/**
 	 * Constructor for the ImageTextModal class.
@@ -33,35 +33,37 @@ export class ImageTextModal extends Modal {
 	 * The modal is automatically closed when the promise resolves.
 	 * @returns A promise that resolves to the value returned by the modal.
 	 */
-	async openWithPromise(): Promise<callbackValue> {
-		return new Promise((resolve) => {
-			this.onOpenModal();
+	openWithPromise(): Promise<callbackValue> {
+		const p = new Promise<callbackValue>((resolve) => {
 			this.onClose = () => {
+				resolve(this.returnValue);
 				this.vueApp?.unmount();
 				this.contentEl.empty();
-				resolve(this.returnValue);
 			};
-			this.open();
 		});
+		this.openModal();
+		return p;
 	}
 
 
 	/**
 	 * Mounts the Vue app to the container element and sets up the promise resolve callbacks.
-	 * @param _resolve - The promise resolve callback.
 	 * @private
 	 */
-	private onOpenModal() {
-		this.vueApp = createApp(ImageToMarkdown, {
-			close: () => this.close(),
-			insertData: (data: callbackValue) => {
-				this.returnValue = data;
-				this.close();
-			},
-			values: this.inputValue,
-		});
+	private openModal() {
+		if (!this.vueApp) {
+			this.vueApp = createApp(ImageToMarkdown, {
+				close: this.close.bind(this),
+				insertData: (data: callbackValue) => {
+					this.returnValue = data;
+					this.close();
+				},
+				values: this.inputValue,
+			});
+			this.vueApp.mount(this.containerEl.children[1]);
+		}
 
-		this.vueApp.mount(this.containerEl.children[1]);
+		this.open();
 	}
 }
 
