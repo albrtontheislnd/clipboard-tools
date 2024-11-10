@@ -1,7 +1,7 @@
 {
 	"id": "clipboard-tools",
 	"name": "Clipboard Tools: Optimizer & Conversion",
-	"version": "0.0.0",
+	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
 	"description": "Optimize clipboard images with WEBP/AVIF formats. Leverages AI models to convert them to Markdown/LaTeX.",
 	"author": "Do Quang Tu",
