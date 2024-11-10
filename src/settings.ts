@@ -5,9 +5,11 @@ import { tUtils } from "./utils";
 import { createApp } from 'vue';
 import { App as vueApp } from 'vue';
 import APIKeysEditor from './components/APIKeysEditor.vue';
+import { tSecureString } from "./secure";
 
 
 export const DEFAULT_SETTINGS: Partial<ImgOptimizerPluginSettings> = {
+	salt: '',
 	imageFormat: 'webp',
 	compressionLevel: 90,
 	binExec: '',
@@ -72,7 +74,8 @@ return acc;
 }, {} as Record<string, string>);
 
 export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
-	plugin: ImgWebpOptimizerPlugin;  
+	plugin: ImgWebpOptimizerPlugin;
+	loadedSalt: boolean = false;
 	/**
 	 * Creates an instance of the ImgOptimizerPluginSettingsTab class.
 	 * @param app - The Obsidian app instance.
@@ -82,7 +85,19 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 	  super(app, plugin);
 	  this.plugin = plugin;
 	}
-  
+
+	saltChecker(): void {
+		// salt
+		if(this.plugin.settings?.salt.trim().length == 0) {
+			this.plugin.settings.salt = tSecureString.generateRandomString();
+			this.plugin.saveSettings().then(() => {
+				this.loadedSalt = true;
+			});
+		} else {
+			this.loadedSalt = true;
+		}
+	}
+
 	/**
 	 * @description
 	 * This method is called when the user navigates to the plugin's settings tab.
@@ -91,6 +106,8 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 	 * @method display
 	 */
 	display(): void {
+		this.saltChecker();
+
 	  let { containerEl } = this;
   
 	  containerEl.empty();
@@ -172,7 +189,7 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 			.setButtonText("API Key Editor")
 			.setCta()
 			.onClick(async () => {
-				if (this.plugin.settings) {
+				if (this.plugin.settings && this.loadedSalt == true) {
 					const ed = new APIKeysEditorModal(this.app, this.plugin.settings);
 					const apiKeys: AIModelSetting_Result = await ed.openWithPromise();
 
@@ -187,9 +204,9 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 						console.log(error);
 					}
 					}
-				  } else {
+				} else {
 					console.error('Plugin settings are not defined');
-				  }
+				}
 			})
 		);
 

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export interface ImgOptimizerPluginSettings {
+	salt: string,
 	imageFormat: string; // webp | avif | png
 	compressionLevel: number,
 	binExec: string,

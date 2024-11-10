@@ -255,10 +255,10 @@ export class tUtils {
 		}
 	}
 
-	static async getRawApiKey(model: string, app: App, settings: ImgOptimizerPluginSettings): Promise<string> {
-		const h = String(settings.aiModelAPIKeys[model]);
-		const s = model;
-		const p = tUtils.getAbsoluteVaultPath(app)?.toString() ?? '';
+	static async getRawApiKey(settingKey: string, _app: App, settings: ImgOptimizerPluginSettings): Promise<string> {
+		const h = String(settings.aiModelAPIKeys[settingKey]);
+		const s = settingKey;
+		const p = settings.salt;
 		
 		try {
 			const v = await tSecureString.decrypt(h, p, s);
@@ -268,9 +268,9 @@ export class tUtils {
 		}
 	}
 
-	static async encodeRawApiKey(originalApiKey: string, settingKey: string, app: App, _settings: ImgOptimizerPluginSettings): Promise<string> {
+	static async encodeRawApiKey(originalApiKey: string, settingKey: string, _app: App, settings: ImgOptimizerPluginSettings): Promise<string> {
 		originalApiKey = originalApiKey.trim();
-		const p = tUtils.getAbsoluteVaultPath(app)?.toString() ?? '';
+		const p = settings.salt;
 		const s = settingKey;
 		
 		try {
