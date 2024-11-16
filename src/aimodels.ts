@@ -7,7 +7,22 @@ export const aiModelsList: AIModel[] = [
         interface: 'Mmllm_Anthropic',
     },
     {
+        model_id: 'claude-3-haiku-20240307',
+        platform_id: 'Anthropic',
+        interface: 'Mmllm_Anthropic',
+    },
+    {
         model_id: 'gemini-1.5-flash',
+        platform_id: 'Google',
+        interface: 'Mmllm_GoogleGenerativeAI',
+    },
+    {
+        model_id: 'gemini-1.5-flash-8b',
+        platform_id: 'Google',
+        interface: 'Mmllm_GoogleGenerativeAI',
+    },
+    {
+        model_id: 'gemini-1.5-pro',
         platform_id: 'Google',
         interface: 'Mmllm_GoogleGenerativeAI',
     },
