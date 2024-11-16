@@ -51,7 +51,8 @@ const modelScripts = {
       'Perform OCR on the screenshot and extract text and mathematical formulas. Convert the extracted text into Markdown syntax and mathematical formulas into LaTex syntax. Do not include any additional information, only the converted text and formulas.'
     ],
     'system': [
-      'You will be provided with an image, and your task is to extract text and mathematical formulas, then convert the extracted text into Markdown syntax and mathematical formulas into LaTex syntax.'
+      'You will be provided with an image, and your task is to extract text and mathematical formulas, then convert the extracted text into Markdown syntax and mathematical formulas into LaTex syntax.',
+      `Convert the provided image into Markdown format. Ensure that all content from the page is included, such as headers, footers, subtexts, images (with alt text if possible), tables, and any other elements. Requirements: (1) Output Only Markdown: Return solely the Markdown content without any additional explanations or comments. (2) No Delimiters: Do not use code fences or delimiters like \`\`\`markdown. (3) Complete Content: Do not omit any part of the page, including headers, footers, and subtext. (4) For mathematical expressions, convert them to LaTeX format, encapsulating them in $...$ for inline math or $$...$$ for display math, as appropriate.`
     ],
     'assistant': [
       'You will be provided with an image, and your task is to extract text and mathematical formulas, then convert the extracted text into Markdown syntax and mathematical formulas into LaTex syntax.'
@@ -246,7 +247,7 @@ export class Mmllm_TogetherAI extends Mmllm implements IMmllm {
 
   async taskOCR(): Promise<string> {
     const user_prompt = this.getOCRPrompt(modelRoles.user)
-    const system_prompt = this.getOCRPrompt(modelRoles.system);
+    const system_prompt = this.getOCRPrompt(modelRoles.system, AIPromptsForceMode.Llama);
 
     const imageParts: ChatCompletionContentPartImage[] = this.images
       .filter((image): image is string => typeof image === "string")
@@ -265,8 +266,8 @@ export class Mmllm_TogetherAI extends Mmllm implements IMmllm {
           top_p: modelParams['ocr'].top_p,
           messages: [
             {
-              "role": "system",
-              "content": system_prompt,
+              role: 'system',
+              content: system_prompt,
             },
             { 
               role: 'user', 
