@@ -27,6 +27,11 @@ export const aiModelsList: AIModel[] = [
         interface: 'Mmllm_GoogleGenerativeAI',
     },
     {
+        model_id: 'gemini-exp-1114',
+        platform_id: 'Google',
+        interface: 'Mmllm_GoogleGenerativeAI',
+    },
+    {
         model_id: 'pixtral-12b-2409',
         platform_id: 'Mistral',
         interface: 'Mmllm_Mistral',
@@ -55,5 +60,15 @@ export const aiModelsList: AIModel[] = [
         model_id: 'gpt-4o-2024-08-06',
         platform_id: 'OpenAI',
         interface: 'Mmllm_OpenAI',
+    },
+    {
+        model_id: 'qwen-vl-plus',
+        platform_id: 'AlibabaCloud',
+        interface: 'Mmllm_AlibabaCloud',
+    },
+    {
+        model_id: 'qwen-vl-max',
+        platform_id: 'AlibabaCloud',
+        interface: 'Mmllm_AlibabaCloud',
     }
 ];
