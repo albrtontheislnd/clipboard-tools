@@ -4,6 +4,7 @@ import { ConfigValues, DEFAULT_SETTINGS, ImgOptimizerPluginSettingsTab } from '.
 import { AIModel, ImageFileObject, ImgOptimizerPluginSettings, stringOrEmptySchema } from './interfaces';
 import { ImageTextModal } from './aiprompt_modal';
 import { createModelInstance } from './aiprompt';
+import { ChangeCaseModal } from './changecase_modal';
 
 export default class ImgWebpOptimizerPlugin extends Plugin {
 	settings?: ImgOptimizerPluginSettings;
@@ -64,6 +65,11 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		this.registerEvent(
 			this.app.workspace.on('editor-menu', (menu, editor, view) => {
 				if (view instanceof MarkdownView) {
+					menu.addItem((item) => {
+						item.setTitle(`Clipboard: Change Case`).setIcon('case-sensitive')
+							.onClick(async () => await this.handleChangeCase(editor, view));
+					});
+
 					menu.addItem((item) => {
 						item.setTitle(`Clipboard: Embed optimized ${this.settings?.imageFormat.toUpperCase()}`).setIcon('image-plus')
 							.onClick(async () => await this.handleClipboardImage(editor, view));
@@ -442,5 +448,23 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		this.locked = true;
 		await Promise.all(promises);
 		this.locked = false;
+    }
+
+    async handleChangeCase(editor: Editor, _view: MarkdownView) {
+		const selectedText = editor.getSelection();
+
+		if (selectedText.trim().length == 0) {
+			new Notice('No text selected to change case.');
+			return;
+		}
+
+		const modal = new ChangeCaseModal(this.app, {
+			selectedText: selectedText, 
+		});
+
+		const result = await modal.openWithPromise();
+		if (result) { // Simplified null check
+			editor.replaceSelection(result.textContent);
+		}
     }
 }
