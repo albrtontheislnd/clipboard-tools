@@ -71,6 +71,11 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 					});
 
 					menu.addItem((item) => {
+						item.setTitle(`Clipboard: Wrap into a Callout`).setIcon('wrap-text')
+							.onClick(async () => await this.handleWrapCallout(editor, view));
+					});
+
+					menu.addItem((item) => {
 						item.setTitle(`Clipboard: Embed optimized ${this.settings?.imageFormat.toUpperCase()}`).setIcon('image-plus')
 							.onClick(async () => await this.handleClipboardImage(editor, view));
 					});
@@ -466,5 +471,35 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		if (result) { // Simplified null check
 			editor.replaceSelection(result.textContent);
 		}
+    }
+
+    async handleWrapCallout(editor: Editor, _view: MarkdownView) {
+		  // Get the active Markdown view
+		  if (!_view) {
+			new Notice("No active Markdown editor found.");
+			return;
+		  }
+		
+		  const selectedText = editor.getSelection();
+		
+		  // If no text is selected, show a notice
+		  if (!selectedText) {
+			new Notice("Please select some text to wrap in a callout.");
+			return;
+		  }
+		
+		  // Check if the selected text is already a callout
+		  const isAlreadyCallout = selectedText.trimStart().startsWith("> [!");
+		  if (isAlreadyCallout) {
+			new Notice("The selected text is already a callout.");
+			return;
+		  }
+		
+		  // Define the callout block
+		  const calloutType = "info";
+		  const calloutContent = `> [!${calloutType}]\n> ${selectedText.replace(/\n/g, "\n> ")}`;
+		
+		  // Replace the selected text with the callout block
+		  editor.replaceSelection(calloutContent);
     }
 }
