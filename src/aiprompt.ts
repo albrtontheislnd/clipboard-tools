@@ -76,6 +76,7 @@ export function createModelInstance(mmllmService: AIModel, apiKey: string, app: 
     'Mmllm_TogetherAI': Mmllm_TogetherAI,
     'Mmllm_OpenAI': Mmllm_OpenAI,
     'Mmllm_AlibabaCloud': Mmllm_AlibabaCloud,
+    'Mmllm_Grok': Mmllm_Grok,
   };
 
   const ClassConstructor = classMap[mmllmService.interface];
@@ -583,6 +584,91 @@ export class Mmllm_Mistral extends Mmllm implements IMmllm {
       });
 
       // @ts-ignore
+      return response.choices?.[0]?.message?.content ?? '';
+    } else {
+      throw new Error(`Model is not an instance of ${this.service.interface}`);
+    }
+    
+
+  }
+}
+
+export class Mmllm_Grok extends Mmllm implements IMmllm {
+
+  imageSpecs: imageSpecs = {
+    maxDimensions: 1000,
+    maxPixels: 1000000,
+    format: 'png',
+    mimeType: 'image/png',
+    outputType: 'DataURL'
+  };
+
+  private endpoint = 'https://api.x.ai/v1';
+
+  constructor(mmllmService: AIModel, apiKey: string, app: App | undefined = undefined) {
+    super(mmllmService, apiKey, app);
+  }
+
+  init(): void {
+    this.model = new OpenAI({
+      apiKey: this.apiKey,
+      baseURL: this.endpoint,
+      dangerouslyAllowBrowser: true,
+    });
+  }
+
+  async taskOCR(): Promise<string> {
+    const user_prompt = this.getOCRPrompt(modelRoles.user)
+
+    const imageParts: ChatCompletionContentPartImage[] = this.images
+      .filter((image): image is string => typeof image === "string")
+      .map(image => (
+        { 
+          type: 'image_url', 
+          image_url: { 'url': image }
+        }
+      ));
+
+      if (this.model instanceof OpenAI) {
+        const response = await this.model.chat.completions.create({
+          model: this.service.model_id,
+          stream: false,
+          temperature: modelParams['ocr'].temperature,
+          top_p: modelParams['ocr'].top_p,
+          messages: [
+            { 
+              role: 'user', 
+              content: [{ type: 'text', text: user_prompt }, ...imageParts], 
+            },
+          ],
+        });
+
+        return response.choices?.[0]?.message?.content ?? '';
+      }
+      else {
+        throw new Error(`Model is not an instance of ${this.service.interface}`);
+      }
+  }
+
+  async taskSummarize(originalText: string): Promise<string> {
+    const system_prompt = this.getSummarizePrompt(originalText, modelRoles.system);
+
+    if (this.model instanceof OpenAI) {
+      const response = await this.model.chat.completions.create({
+        model: this.service.model_id,
+        temperature: modelParams['summarize'].temperature,
+        top_p: modelParams['summarize'].top_p,
+        messages: [
+          {
+            role: 'system',
+            content: system_prompt,
+          },
+          { role: 'user', 
+            content: [{ type: 'text', text: originalText }],
+          },
+        ],
+      });
+    
       return response.choices?.[0]?.message?.content ?? '';
     } else {
       throw new Error(`Model is not an instance of ${this.service.interface}`);

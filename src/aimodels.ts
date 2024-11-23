@@ -70,5 +70,10 @@ export const aiModelsList: AIModel[] = [
         model_id: 'qwen-vl-max',
         platform_id: 'AlibabaCloud',
         interface: 'Mmllm_AlibabaCloud',
+    },
+    {
+        model_id: 'grok-vision-beta',
+        platform_id: 'xAI',
+        interface: 'Mmllm_Grok',
     }
 ];
