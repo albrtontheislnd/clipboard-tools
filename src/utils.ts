@@ -168,6 +168,28 @@ export class tUtils {
 		return `PastedImage_${ISODateTime}_${randomString}${fileExtension}`;
 	}
 
+	static localPathToPartialUrl(localFilePath: string): string {
+		// Normalize paths to ensure consistent separators
+		localFilePath = localFilePath.replace(/\\/g, '/');
+		localFilePath = localFilePath.replace(/\/+/g, '/');
+		localFilePath = localFilePath.replace(/^\/|\/$/g, '');
+		localFilePath = localFilePath.replace(/[^a-zA-Z0-9\.-_\/]/g, '');
+		return localFilePath;
+	}
+
+	static isValidHttpUrl(input: string): boolean {
+		try {
+		  // Create a URL object to validate the input
+		  const url = new URL(input);
+	  
+		  // Check if the protocol is http or https
+		  return url.protocol === 'http:' || url.protocol === 'https:';
+		} catch {
+		  // If URL construction throws, it's not a valid URL
+		  return false;
+		}
+	  }
+
     /**
      * Given a blob, returns a resized version of the image as a blob or as a data URL.
      * 

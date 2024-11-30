@@ -5,6 +5,8 @@ import { AIModel, ImageFileObject, ImgOptimizerPluginSettings, stringOrEmptySche
 import { ImageTextModal } from './aiprompt_modal';
 import { createModelInstance } from './aiprompt';
 import { ChangeCaseModal } from './changecase_modal';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+
 
 export default class ImgWebpOptimizerPlugin extends Plugin {
 	settings?: ImgOptimizerPluginSettings;
@@ -14,9 +16,9 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
 	  }
 	
-	  async saveSettings() {
-		await this.saveData(this.settings);
-	  }
+	async saveSettings() {
+	await this.saveData(this.settings);
+	}
 
 	async onload() {
 		await this.loadSettings();
@@ -231,8 +233,16 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 				file = await this.app.vault.createBinary(filePath, <ArrayBuffer> fileObject.buffer);
 			}
 
-			// Embed the image in the current markdown file
-			return file.path;
+			// S3 hook
+			if(this.settings?.s3Settings.enabled === true) {
+				new Notice(`Uploading image to your S3 service...`);
+				const s3Url = await this.uploadToS3(file, fileObject);
+				return s3Url;
+			} else {
+				return file.path;
+			}
+
+			// end: S3 hook
 		}
 
 		return null;
@@ -290,7 +300,6 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
     }
 
 
-
 	async insertContent(editor: Editor, _filePath: any = undefined, _textContent: any = undefined, _cursor: "from" | "to" | "head" | "anchor" | null = null): Promise<void> {
 		// Parse both inputs at once to avoid multiple schema validations
 		const [filePath, textContent] = await Promise.all([
@@ -301,7 +310,12 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		let content = '';
 		
 		if (filePath.length > 0) {
-			content += `\n![[${filePath}]]\n`;
+			if(tUtils.isValidHttpUrl(filePath)) { // http/https file path
+				content += `\n![](${filePath})\n`;
+			} else { // a local file path
+				content += `\n![[${filePath}]]\n`;
+			}
+	
 			new Notice(`Image saved as ${filePath}`);
 		}
 	
@@ -502,4 +516,47 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		  // Replace the selected text with the callout block
 		  editor.replaceSelection(calloutContent);
     }
+
+	async uploadToS3(file: TFile, fileObject: ImageFileObject): Promise<string | null> {
+		try {
+		  // 1. Get the file content
+		  const fileContent = await this.app.vault.readBinary(file);
+	
+		  // 2. Configure S3 Client
+		  const s3 = new S3Client({
+			region: this.settings?.s3Settings.region,
+			endpoint: this.settings?.s3Settings.endpoint,
+			credentials: {
+			  accessKeyId: this.settings?.s3Settings.accessKey ?? '',
+			  secretAccessKey: this.settings?.s3Settings.secret ?? '',
+			},
+		  });
+	
+		  // 3. Upload the file to S3
+		  const key = tUtils.localPathToPartialUrl(file.path); // Use the file's path as the S3 key
+
+		  const uploadParams = {
+			Bucket: this.settings?.s3Settings.bucket,
+			Key: key,
+			Body: new Uint8Array(fileContent), // Convert ArrayBuffer to Uint8Array
+			ContentType: fileObject.mimeType,
+		  };
+	
+		  await s3.send(new PutObjectCommand(uploadParams));
+	
+		  // 4. Construct the S3 file URL
+		  const s3Url = (new URL(key, this.settings?.s3Settings.publicURLPrefix)).toString();
+	
+		  // 5. Delete the local file
+		  await this.app.vault.delete(file);
+	
+		  // 6. Return the S3 file URL
+		  return s3Url;
+		} catch (error) {
+		  console.error('Error uploading to S3:', error);
+
+		  // return local file path
+		  return file.path;
+		}
+	  }
 }

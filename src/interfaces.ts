@@ -7,7 +7,23 @@ export interface ImgOptimizerPluginSettings {
 	binExec: string,
 	aiModel: string,
 	aiModelAPIKeys: StringKeyObject,
+	s3Settings: ImgS3PluginSettings,
 } 
+
+export interface ImgS3PluginSettings {
+	enabled: boolean,
+	region?: string,
+	bucket?: string,
+	accessKey?: string,
+	secret?: string,
+	endpoint?: string,
+	publicURLPrefix?: string,
+}
+
+export type ImgS3PluginSettings_Result = {
+	action: string;
+	values: ImgS3PluginSettings;
+};
 
 export interface StringKeyObject {
 	[key: string]: string;

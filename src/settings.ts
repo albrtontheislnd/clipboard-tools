@@ -1,10 +1,12 @@
 import { App, Modal, PluginSettingTab, Setting } from "obsidian";
 import ImgWebpOptimizerPlugin from "./main";
-import { ImgOptimizerPluginSettings, AIModel, AIModelSetting, AIModelSetting_Result } from "./interfaces";
+import { ImgOptimizerPluginSettings, AIModel, AIModelSetting, AIModelSetting_Result, ImgS3PluginSettings, ImgS3PluginSettings_Result } from "./interfaces";
 import { tUtils } from "./utils";
 import { createApp } from 'vue';
 import { App as vueApp } from 'vue';
 import APIKeysEditor from './components/APIKeysEditor.vue';
+import S3SettingsEditor from './components/S3SettingsEditor.vue';
+
 import { tSecureString } from "./secure";
 import { aiModelsList } from "./aimodels";
 
@@ -16,6 +18,9 @@ export const DEFAULT_SETTINGS: Partial<ImgOptimizerPluginSettings> = {
 	binExec: '',
 	aiModel: '0',
 	aiModelAPIKeys: {},
+	s3Settings: {
+		enabled: false,
+	},
   };
 
 export const ConfigValues = {
@@ -170,6 +175,94 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 			})
 		);
 
+		// S3 Image Upload settings
+		new Setting(containerEl)
+		.setName('S3 Image Upload')
+		.setDesc("Click the button to open S3 Image Upload settings.")
+		.addButton((btn) => 
+			btn
+			.setButtonText("S3 Image Upload settings")
+			.setCta()
+			.onClick(async () => {
+				if (this.plugin.settings) {
+					const ed = new S3SettingsModal(this.app, this.plugin.settings);
+					const imgS3: ImgS3PluginSettings_Result = await ed.openWithPromise();
+
+					if(imgS3.action == 'save') {
+						try {
+							this.plugin.settings.s3Settings = imgS3.values;
+							await this.plugin.saveSettings();
+						} catch (error) {
+							console.log(error);
+						}
+					}
+				} else {
+					console.error('Plugin settings are not defined');
+				}
+			})
+		);
+
+	}
+  }
+
+// S3 Settings Modal
+class S3SettingsModal extends Modal {
+	private vueApp: vueApp<Element> | null = null;
+	private inputValue: ImgS3PluginSettings = {
+		enabled: false
+	};
+	private action: 'cancel' | 'save' = 'cancel';
+	private settings: ImgOptimizerPluginSettings | undefined = undefined;
+	constructor(app: App, settings: ImgOptimizerPluginSettings) {
+	  super(app);
+	  this.settings = settings;
+	}
+
+	async openWithPromise(): Promise<ImgS3PluginSettings_Result> {
+		const p = new Promise<ImgS3PluginSettings_Result>((resolve) => {
+			this.onClose = () => {
+				resolve({
+					action: this.action,
+					values: this.inputValue,
+				});
+				this.vueApp?.unmount();
+				this.contentEl.empty();
+			};
+		});
+
+		if (this.settings) {
+			this.inputValue = this.settings.s3Settings;
+		} else {
+			// handle the case where this.settings is undefined
+			// do nothing!
+		}
+
+		this.openModal();
+		return p;
+	}
+
+	private openModal() {
+		if (!this.vueApp) {
+			this.vueApp = createApp(S3SettingsEditor, {
+				close: this.close.bind(this),
+				updateSettings: (data: ImgS3PluginSettings, action: 'save' | 'cancel') => {
+					console.log(action);
+					if(action == 'save') {
+						this.inputValue = data;
+						this.action = 'save';
+					} else {
+						this.inputValue = this.settings?.s3Settings ?? this.inputValue;
+						this.action = 'cancel';
+					}
+					
+					this.close();
+				},
+				values: this.inputValue,
+			});
+			this.vueApp.mount(this.containerEl.children[1]);
+		}
+
+		this.open();
 	}
   }
 
