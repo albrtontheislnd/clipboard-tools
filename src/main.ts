@@ -24,7 +24,6 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		await this.loadSettings();
 		this.addSettingTab(new ImgOptimizerPluginSettingsTab(this.app, this));
 
-
 		// This adds an editor command that can perform some operation on the current editor instance
 		this.addCommand({
 			id: 'paste-optimized-img',
@@ -32,6 +31,18 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
 				if (view instanceof MarkdownView) {
 				  await this.handleClipboardImage(editor, view);
+				} else {
+				  // Handle the case where ctx is a MarkdownFileInfo
+				}
+			  }
+		});
+
+		this.addCommand({
+			id: 's3-optimized-img',
+			name: 'Optimize and save to S3 Storage',
+			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
+				if (view instanceof MarkdownView) {
+				  await this.handleClipboardImage(editor, view, true);
 				} else {
 				  // Handle the case where ctx is a MarkdownFileInfo
 				}
@@ -47,19 +58,6 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 				  } else {
 					// Handle the case where ctx is a MarkdownFileInfo
 				  }	
-			}
-		});
-
-		this.addCommand({
-			id: 'ai-summarize-text',
-			name: 'Summarize text',
-			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
-				if (view instanceof MarkdownView) {
-					await this.handleSummarize(editor);
-				  } else {
-					// Handle the case where ctx is a MarkdownFileInfo
-				  }	
-				
 			}
 		});
 
@@ -80,6 +78,11 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 					menu.addItem((item) => {
 						item.setTitle(`Clipboard: Embed optimized ${this.settings?.imageFormat.toUpperCase()}`).setIcon('image-plus')
 							.onClick(async () => await this.handleClipboardImage(editor, view));
+					});
+
+					menu.addItem((item) => {
+						item.setTitle(`Clipboard: Upload ${this.settings?.imageFormat.toUpperCase()} image to S3`).setIcon('image-plus')
+							.onClick(async () => await this.handleClipboardImage(editor, view, true));
 					});
 
 					menu.addItem((item) => {
@@ -204,7 +207,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	 * @param {Blob} blob - The blob to convert.
 	 * @returns {Promise<string | null>} - A promise that resolves to the path of the created file, or null.
 	 */
-	async convertWrapper(blob: Blob): Promise<string | null> {
+	async convertWrapper(blob: Blob, forceS3Upload: boolean = false): Promise<string | null> {
 
 		/**
 		 * Converts a given blob to a specific image format and returns an object with the converted buffer, mime-type, file extension, and a random filename.
@@ -234,7 +237,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			}
 
 			// S3 hook
-			if(this.settings?.s3Settings.enabled === true) {
+			if(this.settings?.s3Settings.enabled === true && forceS3Upload === true) {
 				new Notice(`Uploading image to your S3 service...`);
 				const s3Url = await this.uploadToS3(file, fileObject);
 				return s3Url;
@@ -446,7 +449,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	 * @param editor - The markdown editor where the image will be embedded.
 	 * @param _view - The markdown view associated with the editor.
 	 */
-    async handleClipboardImage(editor: Editor, _view: MarkdownView) {
+    async handleClipboardImage(editor: Editor, _view: MarkdownView, forceS3Upload: boolean = false) {
 		const clipboardItems = (await navigator.clipboard.read()).filter(item => item.types.includes("image/png"));
 
 		if(this.locked) {
@@ -460,7 +463,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		const promises = clipboardItems
 			.map(async (item) => {
 				const blob = await item.getType("image/png");
-				const filePath = await this.convertWrapper(blob);
+				const filePath = await this.convertWrapper(blob, forceS3Upload);
 				await this.insertContent(editor, filePath);
 			});
 
