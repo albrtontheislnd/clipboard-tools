@@ -30,9 +30,8 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			name: 'Embed clipboard image in WEBP/AVIF/PNG/JPEG format',
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
 				if (view instanceof MarkdownView) {
-				  await this.handleClipboardImage(editor, view);
-				} else {
-				  // Handle the case where ctx is a MarkdownFileInfo
+					// Handle the case where ctx is a MarkdownFileInfo
+				  	await this.handleClipboardImage(editor, view);
 				}
 			  }
 		});
@@ -42,9 +41,8 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			name: 'Optimize and save to S3 Storage',
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
 				if (view instanceof MarkdownView) {
-				  await this.handleClipboardImage(editor, view, true);
-				} else {
-				  // Handle the case where ctx is a MarkdownFileInfo
+					// Handle the case where ctx is a MarkdownFileInfo
+				  	await this.handleClipboardImage(editor, view, true);
 				}
 			  }
 		});
@@ -54,10 +52,9 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			name: 'Convert clipboard image to Markdown/Latex',
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
 				if (view instanceof MarkdownView) {
-					await this.handleOCR(editor, view);
-				  } else {
 					// Handle the case where ctx is a MarkdownFileInfo
-				  }	
+					await this.handleOCR(editor, view);
+				}
 			}
 		});
 
@@ -71,12 +68,12 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 					});
 
 					menu.addItem((item) => {
-						item.setTitle(`Clipboard: Wrap into a Callout`).setIcon('wrap-text')
+						item.setTitle(`Clipboard: as Callout`).setIcon('wrap-text')
 							.onClick(async () => await this.handleWrapCallout(editor, view));
 					});
 
 					menu.addItem((item) => {
-						item.setTitle(`Clipboard: Embed optimized ${this.settings?.imageFormat.toUpperCase()}`).setIcon('image-plus')
+						item.setTitle(`Clipboard: Embed as ${this.settings?.imageFormat.toUpperCase()}`).setIcon('image-plus')
 							.onClick(async () => await this.handleClipboardImage(editor, view));
 					});
 
@@ -86,12 +83,12 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 					});
 
 					menu.addItem((item) => {
-						item.setTitle(`Clipboard: Convert to Markdown`).setIcon('brain-circuit')
+						item.setTitle(`Clipboard: Image 2 Markdown`).setIcon('brain-circuit')
 							.onClick(async () => await this.handleOCR(editor, view));
 					});
 
 					menu.addItem((item) => {
-						item.setTitle(`Clipboard: Summarize text`).setIcon('clipboard-pen-line')
+						item.setTitle(`Clipboard: Summarize`).setIcon('clipboard-pen-line')
 							.onClick(async () => await this.handleSummarize(editor));
 					});
 				}
@@ -244,13 +241,11 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			} else {
 				return file.path;
 			}
-
 			// end: S3 hook
 		}
 
 		return null;
 	}
-
 
 
 	/**
@@ -276,16 +271,17 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
     async convertImageToMarkdown(blob: Blob): Promise<string | null> {
 		const { aiModel, aiModel_APIKey } = await this.obtainAIModelInfo();
 
-		if(aiModel === undefined) {
-			new Notice(`AI Model not found`);
-			return null;
-		} else if (aiModel_APIKey.length === 0) {
-			new Notice(`AI Model API Key not found`);
-			return null;
-		} else {
+		try {
+			if(aiModel === undefined) throw "AI Model not found.";
+			if (aiModel_APIKey.length === 0) throw "AI Model API Key not found.";
+
+			// success!
 			const msg = `Interacting with ${aiModel.model_id}`;
 			console.log(msg);
 			new Notice(msg);
+		} catch (error) {
+			new Notice(error as string);
+			return null;
 		}
 
 		let resultText = '';

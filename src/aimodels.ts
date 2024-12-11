@@ -52,12 +52,17 @@ export const aiModelsList: AIModel[] = [
         interface: 'Mmllm_TogetherAI',
     },
     {
-        model_id: 'gpt-4o-mini-2024-07-18',
+        model_id: 'gpt-4o',
         platform_id: 'OpenAI',
         interface: 'Mmllm_OpenAI',
     },
     {
-        model_id: 'gpt-4o-2024-08-06',
+        model_id: 'gpt-4o-mini',
+        platform_id: 'OpenAI',
+        interface: 'Mmllm_OpenAI',
+    },
+    {
+        model_id: 'gpt-4-turbo',
         platform_id: 'OpenAI',
         interface: 'Mmllm_OpenAI',
     },
