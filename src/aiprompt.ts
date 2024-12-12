@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { GenerativeModel, GoogleGenerativeAI } from "@google/generative-ai";
 import { Mistral } from '@mistralai/mistralai';
 import OpenAI from "openai";
-import { App, requestUrl, RequestUrlParam, TFile } from "obsidian";
+import { App, TFile } from "obsidian";
 import { tUtils } from "./utils";
 import { AIModel } from "./interfaces";
 import { ChatCompletionContentPartImage } from "openai/resources/chat/completions";
@@ -674,7 +674,6 @@ export class Mmllm_Grok extends Mmllm implements IMmllm {
       throw new Error(`Model is not an instance of ${this.service.interface}`);
     }
     
-
   }
 }
 
@@ -685,17 +684,25 @@ export class Mmllm_AlibabaCloud extends Mmllm implements IMmllm {
     maxPixels: 1000000,
     format: 'png',
     mimeType: 'image/png',
-    outputType: 'Base64'
+    outputType: 'DataURL'
   };
-  requestParams!: RequestUrlParam;
-  private endpoint = 'https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation';
+
+  // requestParams!: RequestUrlParam;
+
+  private endpoint = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1';
 
   constructor(mmllmService: AIModel, apiKey: string, app: App | undefined = undefined) {
     super(mmllmService, apiKey, app);
   }
 
   init(): void {
-    this.requestParams = {
+    this.model = new OpenAI({
+      apiKey: this.apiKey,
+      baseURL: this.endpoint,
+      dangerouslyAllowBrowser: true,
+    });
+
+/*     this.requestParams = {
       url: this.endpoint,
       throw: true,
       method: 'POST',
@@ -704,10 +711,10 @@ export class Mmllm_AlibabaCloud extends Mmllm implements IMmllm {
         'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json',
       },
-    };
+    }; */
   }
 
-  async multimodalRequest(inputPayload: any): Promise<string> {
+/*   async multimodalRequest(inputPayload: any): Promise<string> {
     const payload = {
       model: this.service.model_id,
       input: inputPayload,
@@ -726,56 +733,63 @@ export class Mmllm_AlibabaCloud extends Mmllm implements IMmllm {
       console.error('Error:', error);
       return String(error);
     }    
-  }
+  } */
 
   async taskOCR(): Promise<string> {
     const user_prompt = this.getOCRPrompt(modelRoles.user)
-    const image = this.images[0];
 
-    const input = {
-      messages: [
-          {
-              role: "system",
-              content: [
-                  { text: "You are an OCR assistant." }
-              ]
-          },
-          {
-              role: "user",
-              content: [
-                  { image: image },
-                  { text: user_prompt }
-              ]
-          }
-      ]
-    };
+    const imageParts: ChatCompletionContentPartImage[] = this.images
+      .filter((image): image is string => typeof image === "string")
+      .map(image => (
+        { 
+          type: 'image_url', 
+          image_url: { 'url': image }
+        }
+      ));
 
-    console.log(input);
+      if (this.model instanceof OpenAI) {
+        const response = await this.model.chat.completions.create({
+          model: this.service.model_id,
+          stream: false,
+          temperature: modelParams['ocr'].temperature,
+          top_p: modelParams['ocr'].top_p,
+          messages: [
+            { 
+              role: 'user', 
+              content: [{ type: 'text', text: user_prompt }, ...imageParts], 
+            },
+          ],
+        });
 
-    const response = await this.multimodalRequest(input);
-    return response;
+        return response.choices?.[0]?.message?.content ?? '';
+      }
+      else {
+        throw new Error(`Model is not an instance of ${this.service.interface}`);
+      }
   }
 
   async taskSummarize(originalText: string): Promise<string> {
     const system_prompt = this.getSummarizePrompt(originalText, modelRoles.system);
-    const input = {
-      messages: [
-          {
-              role: "system",
-              content: [
-                  { text: system_prompt }
-              ]
-          },
-          {
-              role: "user",
-              content: [
-                  { text: originalText }
-              ]
-          }
-      ]
-    };
 
-    const response = await this.multimodalRequest(input);
-    return response;
+    if (this.model instanceof OpenAI) {
+      const response = await this.model.chat.completions.create({
+        model: this.service.model_id,
+        temperature: modelParams['summarize'].temperature,
+        top_p: modelParams['summarize'].top_p,
+        messages: [
+          {
+            role: 'system',
+            content: system_prompt,
+          },
+          { role: 'user', 
+            content: [{ type: 'text', text: originalText }],
+          },
+        ],
+      });
+    
+      return response.choices?.[0]?.message?.content ?? '';
+    } else {
+      throw new Error(`Model is not an instance of ${this.service.interface}`);
+    }
   }
 }

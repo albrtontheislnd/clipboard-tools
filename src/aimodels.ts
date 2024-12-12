@@ -2,12 +2,7 @@ import { AIModel } from "./interfaces";
 
 export const aiModelsList: AIModel[] = [
     {
-        model_id: 'claude-3-5-sonnet-20241022',
-        platform_id: 'Anthropic',
-        interface: 'Mmllm_Anthropic',
-    },
-    {
-        model_id: 'claude-3-haiku-20240307',
+        model_id: 'claude-3-5-sonnet-latest',
         platform_id: 'Anthropic',
         interface: 'Mmllm_Anthropic',
     },
@@ -27,12 +22,22 @@ export const aiModelsList: AIModel[] = [
         interface: 'Mmllm_GoogleGenerativeAI',
     },
     {
-        model_id: 'gemini-exp-1114',
+        model_id: 'gemini-exp-1206',
+        platform_id: 'Google',
+        interface: 'Mmllm_GoogleGenerativeAI',
+    },
+    {
+        model_id: 'gemini-2.0-flash-exp',
         platform_id: 'Google',
         interface: 'Mmllm_GoogleGenerativeAI',
     },
     {
         model_id: 'pixtral-12b-2409',
+        platform_id: 'Mistral',
+        interface: 'Mmllm_Mistral',
+    },
+    {
+        model_id: 'pixtral-large-latest',
         platform_id: 'Mistral',
         interface: 'Mmllm_Mistral',
     },
