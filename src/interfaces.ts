@@ -34,6 +34,7 @@ export interface ImageFileObject {
 	fileExtension: string;
 	buffer: ArrayBuffer | null;
 	randomFilename: string;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	hasTFile ?: any;
 }
 

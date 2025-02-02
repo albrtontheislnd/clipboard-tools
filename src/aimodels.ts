@@ -7,6 +7,11 @@ export const aiModelsList: AIModel[] = [
         interface: 'Mmllm_Anthropic',
     },
     {
+        model_id: 'gemini-2.0-flash-exp',
+        platform_id: 'Google',
+        interface: 'Mmllm_GoogleGenerativeAI',
+    },
+    {
         model_id: 'gemini-1.5-flash',
         platform_id: 'Google',
         interface: 'Mmllm_GoogleGenerativeAI',
@@ -18,16 +23,6 @@ export const aiModelsList: AIModel[] = [
     },
     {
         model_id: 'gemini-1.5-pro',
-        platform_id: 'Google',
-        interface: 'Mmllm_GoogleGenerativeAI',
-    },
-    {
-        model_id: 'gemini-exp-1206',
-        platform_id: 'Google',
-        interface: 'Mmllm_GoogleGenerativeAI',
-    },
-    {
-        model_id: 'gemini-2.0-flash-exp',
         platform_id: 'Google',
         interface: 'Mmllm_GoogleGenerativeAI',
     },
@@ -55,6 +50,16 @@ export const aiModelsList: AIModel[] = [
         model_id: 'meta-llama/Llama-Vision-Free',
         platform_id: 'TogetherAI',
         interface: 'Mmllm_TogetherAI',
+    },
+    {
+        model_id: 'Qwen/Qwen2-VL-72B-Instruct',
+        platform_id: 'TogetherAI',
+        interface: 'Mmllm_TogetherAI',
+    },
+    {
+        model_id: 'o1',
+        platform_id: 'OpenAI',
+        interface: 'Mmllm_OpenAI',
     },
     {
         model_id: 'gpt-4o',
