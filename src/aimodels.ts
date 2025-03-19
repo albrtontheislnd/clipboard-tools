@@ -2,17 +2,17 @@ import { AIModel } from "./interfaces";
 
 export const aiModelsList: AIModel[] = [
     {
-        model_id: 'claude-3-5-sonnet-latest',
+        model_id: 'claude-3-7-sonnet-latest',
         platform_id: 'Anthropic',
         interface: 'Mmllm_Anthropic',
     },
     {
-        model_id: 'gemini-2.0-flash-exp',
+        model_id: 'gemini-2.0-flash',
         platform_id: 'Google',
         interface: 'Mmllm_GoogleGenerativeAI',
     },
     {
-        model_id: 'gemini-1.5-flash',
+        model_id: 'gemini-2.0-flash-lite',
         platform_id: 'Google',
         interface: 'Mmllm_GoogleGenerativeAI',
     },
@@ -22,17 +22,22 @@ export const aiModelsList: AIModel[] = [
         interface: 'Mmllm_GoogleGenerativeAI',
     },
     {
-        model_id: 'gemini-1.5-pro',
+        model_id: 'gemini-1.5-flash',
         platform_id: 'Google',
         interface: 'Mmllm_GoogleGenerativeAI',
     },
     {
-        model_id: 'pixtral-12b-2409',
+        model_id: 'pixtral-12b-latest',
         platform_id: 'Mistral',
         interface: 'Mmllm_Mistral',
     },
     {
         model_id: 'pixtral-large-latest',
+        platform_id: 'Mistral',
+        interface: 'Mmllm_Mistral',
+    },
+    {
+        model_id: 'mistral-small-latest',
         platform_id: 'Mistral',
         interface: 'Mmllm_Mistral',
     },
@@ -47,19 +52,9 @@ export const aiModelsList: AIModel[] = [
         interface: 'Mmllm_TogetherAI',
     },
     {
-        model_id: 'meta-llama/Llama-Vision-Free',
-        platform_id: 'TogetherAI',
-        interface: 'Mmllm_TogetherAI',
-    },
-    {
         model_id: 'Qwen/Qwen2-VL-72B-Instruct',
         platform_id: 'TogetherAI',
         interface: 'Mmllm_TogetherAI',
-    },
-    {
-        model_id: 'o1',
-        platform_id: 'OpenAI',
-        interface: 'Mmllm_OpenAI',
     },
     {
         model_id: 'gpt-4o',
@@ -72,7 +67,7 @@ export const aiModelsList: AIModel[] = [
         interface: 'Mmllm_OpenAI',
     },
     {
-        model_id: 'gpt-4-turbo',
+        model_id: 'chatgpt-4o-latest',
         platform_id: 'OpenAI',
         interface: 'Mmllm_OpenAI',
     },
@@ -88,6 +83,11 @@ export const aiModelsList: AIModel[] = [
     },
     {
         model_id: 'grok-vision-beta',
+        platform_id: 'xAI',
+        interface: 'Mmllm_Grok',
+    },
+    {
+        model_id: 'grok-2-vision-latest',
         platform_id: 'xAI',
         interface: 'Mmllm_Grok',
     }
