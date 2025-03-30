@@ -7,6 +7,11 @@ export const aiModelsList: AIModel[] = [
         interface: 'Mmllm_Anthropic',
     },
     {
+        model_id: 'gemini-2.5-pro-exp-03-25',
+        platform_id: 'Google',
+        interface: 'Mmllm_GoogleGenerativeAI',
+    },
+    {
         model_id: 'gemini-2.0-flash',
         platform_id: 'Google',
         interface: 'Mmllm_GoogleGenerativeAI',

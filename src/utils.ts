@@ -138,6 +138,7 @@ export class tUtils {
 	 * @param blob - The blob to convert.
 	 * @returns A promise that resolves to a base64 encoded string.
 	 */
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	static async blobToBase64(blob: Blob): Promise<any> {
 		return new Promise((resolve, reject) => {
 		  const reader = new FileReader();

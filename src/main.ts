@@ -299,6 +299,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
     }
 
 
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	async insertContent(editor: Editor, _filePath: any = undefined, _textContent: any = undefined, _cursor: "from" | "to" | "head" | "anchor" | null = null): Promise<void> {
 		// Parse both inputs at once to avoid multiple schema validations
 		const [filePath, textContent] = await Promise.all([
@@ -346,6 +347,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	 * @param editor - The markdown editor where the image and text will be embedded.
 	 * @param _view - The markdown view associated with the editor.
 	 */
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     async handleOCR(editor: Editor, _view: MarkdownView) {
 		const clipboardItems = await navigator.clipboard.read();
 
@@ -468,6 +470,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		this.locked = false;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     async handleChangeCase(editor: Editor, _view: MarkdownView) {
 		const selectedText = editor.getSelection();
 
