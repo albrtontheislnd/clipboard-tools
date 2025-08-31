@@ -6,6 +6,7 @@ import { ImageTextModal } from './aiprompt_modal';
 import { createModelInstance } from './aiprompt';
 import { ChangeCaseModal } from './changecase_modal';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+//import { readFile } from 'fs/promises';
 
 
 export default class ImgWebpOptimizerPlugin extends Plugin {
@@ -21,79 +22,81 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	}
 
 	async onload() {
-		await this.loadSettings();
-		this.addSettingTab(new ImgOptimizerPluginSettingsTab(this.app, this));
+		this.app.workspace.onLayoutReady(async () => {
+			await this.loadSettings();
+			this.addSettingTab(new ImgOptimizerPluginSettingsTab(this.app, this));
 
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'paste-optimized-img',
-			name: 'Embed clipboard image in WEBP/AVIF/PNG/JPEG format',
-			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
-				if (view instanceof MarkdownView) {
-					// Handle the case where ctx is a MarkdownFileInfo
-				  	await this.handleClipboardImage(editor, view);
+			// This adds an editor command that can perform some operation on the current editor instance
+			this.addCommand({
+				id: 'paste-optimized-img',
+				name: 'Embed clipboard image in WEBP/AVIF/PNG/JPEG format',
+				editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
+					if (view instanceof MarkdownView) {
+						// Handle the case where ctx is a MarkdownFileInfo
+						await this.handleClipboardImage(editor, view);
+					}
 				}
-			  }
+			});
+
+			this.addCommand({
+				id: 's3-optimized-img',
+				name: 'Optimize and save to S3 Storage',
+				editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
+					if (view instanceof MarkdownView) {
+						// Handle the case where ctx is a MarkdownFileInfo
+						await this.handleClipboardImage(editor, view, true);
+					}
+				}
+			});
+
+			this.addCommand({
+				id: 'ai-convert-md',
+				name: 'Convert clipboard image to Markdown/Latex',
+				editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
+					if (view instanceof MarkdownView) {
+						// Handle the case where ctx is a MarkdownFileInfo
+						await this.handleOCR(editor, view);
+					}
+				}
+			});
+
+			// editor-menu
+			this.registerEvent(
+				this.app.workspace.on('editor-menu', (menu, editor, view) => {
+					if (view instanceof MarkdownView) {
+						menu.addItem((item) => {
+							item.setTitle(`Clipboard: Change Case`).setIcon('case-sensitive')
+								.onClick(async () => await this.handleChangeCase(editor, view));
+						});
+
+						menu.addItem((item) => {
+							item.setTitle(`Clipboard: as Callout`).setIcon('wrap-text')
+								.onClick(async () => await this.handleWrapCallout(editor, view));
+						});
+
+						menu.addItem((item) => {
+							item.setTitle(`Clipboard: Embed as ${this.settings?.imageFormat.toUpperCase()}`).setIcon('image-plus')
+								.onClick(async () => await this.handleClipboardImage(editor, view));
+						});
+
+						menu.addItem((item) => {
+							item.setTitle(`Clipboard: Upload ${this.settings?.imageFormat.toUpperCase()} image to S3`).setIcon('image-plus')
+								.onClick(async () => await this.handleClipboardImage(editor, view, true));
+						});
+
+						menu.addItem((item) => {
+							item.setTitle(`Clipboard: Image 2 Markdown`).setIcon('brain-circuit')
+								.onClick(async () => await this.handleOCR(editor, view));
+						});
+
+						menu.addItem((item) => {
+							item.setTitle(`Clipboard: Summarize`).setIcon('clipboard-pen-line')
+								.onClick(async () => await this.handleSummarize(editor));
+						});
+					}
+				})
+			);
 		});
-
-		this.addCommand({
-			id: 's3-optimized-img',
-			name: 'Optimize and save to S3 Storage',
-			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
-				if (view instanceof MarkdownView) {
-					// Handle the case where ctx is a MarkdownFileInfo
-				  	await this.handleClipboardImage(editor, view, true);
-				}
-			  }
-		});
-
-		this.addCommand({
-			id: 'ai-convert-md',
-			name: 'Convert clipboard image to Markdown/Latex',
-			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
-				if (view instanceof MarkdownView) {
-					// Handle the case where ctx is a MarkdownFileInfo
-					await this.handleOCR(editor, view);
-				}
-			}
-		});
-
-		// editor-menu
-		this.registerEvent(
-			this.app.workspace.on('editor-menu', (menu, editor, view) => {
-				if (view instanceof MarkdownView) {
-					menu.addItem((item) => {
-						item.setTitle(`Clipboard: Change Case`).setIcon('case-sensitive')
-							.onClick(async () => await this.handleChangeCase(editor, view));
-					});
-
-					menu.addItem((item) => {
-						item.setTitle(`Clipboard: as Callout`).setIcon('wrap-text')
-							.onClick(async () => await this.handleWrapCallout(editor, view));
-					});
-
-					menu.addItem((item) => {
-						item.setTitle(`Clipboard: Embed as ${this.settings?.imageFormat.toUpperCase()}`).setIcon('image-plus')
-							.onClick(async () => await this.handleClipboardImage(editor, view));
-					});
-
-					menu.addItem((item) => {
-						item.setTitle(`Clipboard: Upload ${this.settings?.imageFormat.toUpperCase()} image to S3`).setIcon('image-plus')
-							.onClick(async () => await this.handleClipboardImage(editor, view, true));
-					});
-
-					menu.addItem((item) => {
-						item.setTitle(`Clipboard: Image 2 Markdown`).setIcon('brain-circuit')
-							.onClick(async () => await this.handleOCR(editor, view));
-					});
-
-					menu.addItem((item) => {
-						item.setTitle(`Clipboard: Summarize`).setIcon('clipboard-pen-line')
-							.onClick(async () => await this.handleSummarize(editor));
-					});
-				}
-			})
-		);
 	}
 
 	/**
@@ -168,19 +171,30 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		
 		// 2, get output filename for AVIF
 		const tempAVIF_normalizedPath = await this.app.fileManager.getAvailablePathForAttachment(`${tempFilename}.avif`);
-		const tempAVIF_absolutePath = adapter.getFullPath(tempAVIF_normalizedPath);
+		// const tempAVIF_absolutePath = adapter.getFullPath(tempAVIF_normalizedPath);
 
 		// 3, convert using commandline tools
-		const execResult = await tUtils.convertImage(
+/* 		const execResult = await tUtils.convertImage(
 			this.settings?.binExec as string,
 			tempPNG_absolutePath, 
 			tempAVIF_absolutePath, 
 			this.settings?.compressionLevel as number);
 
-		console.log(execResult.stderr, execResult.stdout, execResult.result);
+		console.log(execResult.stderr, execResult.stdout, execResult.result); */
+
+		const execResult = await tUtils.convertImageToBuffer(
+			this.settings?.binExec as string,
+			tempPNG_absolutePath, 
+			this.settings?.compressionLevel as number);
+
+		console.log(execResult.data?.byteLength, execResult.stderr, execResult.stdout, execResult.result); 
 
 		// 4, check
-		const _file = this.app.vault.getFileByPath(tempAVIF_normalizedPath);
+/* 		const _file = this.app.vault.getFileByPath(tempAVIF_normalizedPath);
+		console.log(_file); */
+
+		const _file = execResult.data ? await this.app.vault.createBinary(tempAVIF_normalizedPath, execResult.data) : null;
+		console.log(_file);
 
 		if(_file instanceof TFile) { // success!
 			this.app.fileManager.trashFile(tempPNGFile); // we don't need it anymore
@@ -535,8 +549,9 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		  });
 	
 		  // 3. Upload the file to S3
-		  const key = tUtils.localPathToPartialUrl(file.path); // Use the file's path as the S3 key
-
+		  // Use the file's path as the S3 key
+		  const key = `${tUtils.slugifyVaultName(this.app.vault.getName())}/${tUtils.localPathToPartialUrl(file.path)}`;
+		  
 		  const uploadParams = {
 			Bucket: this.settings?.s3Settings.bucket,
 			Key: key,

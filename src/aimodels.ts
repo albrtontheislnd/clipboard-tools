@@ -1,18 +1,30 @@
 import { AIModel } from "./interfaces";
 
 export const aiModelsList: AIModel[] = [
+    // Claude
+    {
+        model_id: 'claude-3-haiku-20240307',
+        platform_id: 'Anthropic',
+        interface: 'Mmllm_Anthropic',
+    },
+    {
+        model_id: 'claude-3-5-haiku-latest',
+        platform_id: 'Anthropic',
+        interface: 'Mmllm_Anthropic',
+    },
     {
         model_id: 'claude-3-7-sonnet-latest',
         platform_id: 'Anthropic',
         interface: 'Mmllm_Anthropic',
     },
     {
-        model_id: 'gemini-2.5-pro-exp-03-25',
-        platform_id: 'Google',
-        interface: 'Mmllm_GoogleGenerativeAI',
+        model_id: 'claude-sonnet-4-0',
+        platform_id: 'Anthropic',
+        interface: 'Mmllm_Anthropic',
     },
+    // Gemini
     {
-        model_id: 'gemini-2.0-flash',
+        model_id: 'gemini-2.5-flash-lite',
         platform_id: 'Google',
         interface: 'Mmllm_GoogleGenerativeAI',
     },
@@ -22,15 +34,26 @@ export const aiModelsList: AIModel[] = [
         interface: 'Mmllm_GoogleGenerativeAI',
     },
     {
-        model_id: 'gemini-1.5-flash-8b',
+        model_id: 'gemini-2.0-flash',
         platform_id: 'Google',
         interface: 'Mmllm_GoogleGenerativeAI',
     },
     {
-        model_id: 'gemini-1.5-flash',
+        model_id: 'gemini-2.5-flash',
         platform_id: 'Google',
         interface: 'Mmllm_GoogleGenerativeAI',
     },
+    {
+        model_id: 'gemini-1.5-flash-8b-latest',
+        platform_id: 'Google',
+        interface: 'Mmllm_GoogleGenerativeAI',
+    },
+    {
+        model_id: 'gemini-1.5-flash-latest',
+        platform_id: 'Google',
+        interface: 'Mmllm_GoogleGenerativeAI',
+    },
+    // Mistral
     {
         model_id: 'pixtral-12b-latest',
         platform_id: 'Mistral',
@@ -42,40 +65,47 @@ export const aiModelsList: AIModel[] = [
         interface: 'Mmllm_Mistral',
     },
     {
-        model_id: 'mistral-small-latest',
+        model_id: 'mistral-medium-latest',
         platform_id: 'Mistral',
         interface: 'Mmllm_Mistral',
     },
     {
-        model_id: 'meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo',
-        platform_id: 'TogetherAI',
-        interface: 'Mmllm_TogetherAI',
+        model_id: 'mistral-small-latest',
+        platform_id: 'Mistral',
+        interface: 'Mmllm_Mistral',
     },
-    {
-        model_id: 'meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo',
-        platform_id: 'TogetherAI',
-        interface: 'Mmllm_TogetherAI',
-    },
-    {
-        model_id: 'Qwen/Qwen2-VL-72B-Instruct',
-        platform_id: 'TogetherAI',
-        interface: 'Mmllm_TogetherAI',
-    },
-    {
-        model_id: 'gpt-4o',
-        platform_id: 'OpenAI',
-        interface: 'Mmllm_OpenAI',
-    },
+    // OpenAI
     {
         model_id: 'gpt-4o-mini',
         platform_id: 'OpenAI',
         interface: 'Mmllm_OpenAI',
     },
     {
-        model_id: 'chatgpt-4o-latest',
+        model_id: 'gpt-4.1-nano',
         platform_id: 'OpenAI',
         interface: 'Mmllm_OpenAI',
     },
+    {
+        model_id: 'gpt-4.1-mini',
+        platform_id: 'OpenAI',
+        interface: 'Mmllm_OpenAI',
+    },
+    {
+        model_id: 'gpt-5-mini',
+        platform_id: 'OpenAI',
+        interface: 'Mmllm_OpenAI',
+    },
+    {
+        model_id: 'gpt-5-nano',
+        platform_id: 'OpenAI',
+        interface: 'Mmllm_OpenAI',
+    },
+    {
+        model_id: 'o4-mini',
+        platform_id: 'OpenAI',
+        interface: 'Mmllm_OpenAI',
+    },
+    // Qwen
     {
         model_id: 'qwen-vl-plus',
         platform_id: 'AlibabaCloud',
@@ -86,7 +116,7 @@ export const aiModelsList: AIModel[] = [
         platform_id: 'AlibabaCloud',
         interface: 'Mmllm_AlibabaCloud',
     },
-    {
+/*     {
         model_id: 'grok-vision-beta',
         platform_id: 'xAI',
         interface: 'Mmllm_Grok',
@@ -95,5 +125,5 @@ export const aiModelsList: AIModel[] = [
         model_id: 'grok-2-vision-latest',
         platform_id: 'xAI',
         interface: 'Mmllm_Grok',
-    }
+    } */
 ];

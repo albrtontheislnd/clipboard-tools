@@ -1,5 +1,6 @@
 import { execFile } from "child_process";
 import { promises as fs } from "fs";
+import { promisify } from 'util';
 import { App, FileSystemAdapter, TFile, Platform } from "obsidian";
 import * as path from "path";
 import { tSecureString } from "./secure";
@@ -110,6 +111,124 @@ export class tUtils {
 	}
 
 	/**
+	 * Converts an image file to AVIF format using the specified command-line tool and returns the data as ArrayBuffer.
+	 * 
+	 * @param {string} progPath - The file path to the command-line tool (e.g., ffmpeg, magick, vips).
+	 * @param {string} inputFilePath - The path to the input image file.
+	 * @param {number} quality - The desired quality level for the output image, on a scale of 1 to 100.
+	 * @returns {Promise<{data: ArrayBuffer | null, stdout: string, stderr: string, result: boolean}>} - A promise that resolves to an object containing
+	 * the AVIF data as ArrayBuffer (null on failure), standard output, standard error, and a boolean result indicating success (true) or failure (false).
+	 */
+	static async convertImageToBuffer(progPath: string, inputFilePath: string, quality: number): Promise<{
+		data: ArrayBuffer | null,
+		stdout: string, 
+		stderr: string,
+		result: boolean,
+	}> {
+		// Input validation
+		if (quality < 1 || quality > 100) {
+			return { 
+				data: null,
+				stdout: '', 
+				stderr: `Quality must be between 1 and 100, got: ${quality}`, 
+				result: false 
+			};
+		}
+
+		// Check if input file exists
+		try {
+			await fs.access(inputFilePath);
+		} catch {
+			return { 
+				data: null,
+				stdout: '', 
+				stderr: `Input file does not exist: ${inputFilePath}`, 
+				result: false 
+			};
+		}
+
+		const appCheck = await tUtils.findProgPath(progPath);
+		const app = path.basename(String(appCheck), Platform.isWin ? '.exe' : '').toLowerCase();
+		let args: string[];
+
+		switch (app) {
+			case 'ffmpeg':
+				args = [
+					'-i', inputFilePath,             // Input file path
+					'-c:v', 'libaom-av1',           // AVIF codec
+					'-crf', String(tUtils.mapQualityToAvif(quality)),  // Quality setting
+					'-pix_fmt', 'yuv420p',          // 4:2:0 chroma subsampling
+					//'-cpu-used', '4',               // Speed vs quality tradeoff
+					//'-row-mt', '1',                 // Enable row-based multi-threading
+					//'-f', 'avif',                   // Force AVIF format
+					'pipe:1'                        // Output to stdout
+				];
+				break;
+
+			case 'magick':
+				args = [
+					inputFilePath, 
+					'-quality', `${quality}`,
+					'avif:-'                        // Output AVIF to stdout
+				];
+				break;
+
+			case 'vips':
+				args = [
+					'copy',
+					inputFilePath,
+					`.avif[Q=${quality.toString()}]`  // Output AVIF to stdout
+				];
+				break;
+
+			default:
+				return { 
+					data: null,
+					stdout: '', 
+					stderr: `Unsupported application: ${app}`, 
+					result: false 
+				};
+		}
+
+		try {
+			const execFilePromise2 = promisify(execFile);
+			const { stdout, stderr } = await execFilePromise2(progPath, args, {
+				encoding: 'buffer',  // Important: get raw binary data
+				maxBuffer: 50 * 1024 * 1024  // 50MB buffer limit (adjust as needed)
+			});
+
+			// Check if we got any data
+			if (!stdout || stdout.length === 0) {
+				return {
+					data: null,
+					stdout: '',
+					stderr: stderr?.toString() || 'No output data received',
+					result: false
+				};
+			}
+
+			// Convert Buffer to ArrayBuffer (ensure type is ArrayBuffer)
+			const arrayBuffer: ArrayBuffer = Uint8Array.from(stdout).buffer;
+
+			return {
+				data: arrayBuffer,
+				stdout: '', // stdout contains binary data, so we don't return it as text
+				stderr: stderr?.toString() || '',
+				result: true,
+			};
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			console.error(`${app.toUpperCase()} execution error:`, error);
+			return { 
+				data: null,
+				stdout: '', 
+				stderr: errorMessage, 
+				result: false 
+			};
+		}
+	}
+
+	/**
 	 * @description
 	 * Checks if a given file path is an executable file with the given name
 	 * and checks if it has execute permissions.
@@ -176,6 +295,35 @@ export class tUtils {
 		localFilePath = localFilePath.replace(/^\/|\/$/g, '');
 		localFilePath = localFilePath.replace(/[^a-zA-Z0-9\.-_\/]/g, '');
 		return localFilePath;
+	}
+
+	static slugifyVaultName(name: string): string {
+		let sanitized = name
+			.toLowerCase()
+			// Replace disallowed filename characters, whitespace, punctuation with "-"
+			.replace(/[^\p{L}\p{N}]+/gu, "-")
+			// Trim leading/trailing dashes
+			.replace(/^-+|-+$/g, "")
+			// Remove Windows-reserved chars (also safer for S3)
+			.replace(/[<>:"/\\|?*]/g, "")
+			// Trim trailing dots/spaces (bad for Windows + S3 UI)
+			.replace(/[. ]+$/g, "")
+			// Remove control chars (U+0000–U+001F, U+007F)
+			.replace(/[\x00-\x1F\x7F]/g, "");
+
+		// Enforce max length (255 chars for filesystem, fits S3)
+		if (sanitized.length > 255) {
+			sanitized = sanitized.slice(0, 255);
+			// Remove trailing "-" or "."
+			sanitized = sanitized.replace(/[-.]+$/g, "");
+		}
+
+		// Fallback if empty
+		if (!sanitized) {
+			sanitized = "untitled-vault";
+		}
+
+		return sanitized;
 	}
 
 	static isValidHttpUrl(input: string): boolean {

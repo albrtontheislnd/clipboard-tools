@@ -131,7 +131,7 @@ export class Mmllm {
 
     try {
       prompt = modelScripts[task][role][forceMode];
-    } catch (error) {
+    } catch {
       prompt = modelScripts[task][modelRoles.user][AIPromptsForceMode.Default];
       
     }

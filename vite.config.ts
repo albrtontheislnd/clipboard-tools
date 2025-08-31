@@ -4,6 +4,9 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueJsx from '@vitejs/plugin-vue-jsx'
 import vueDevTools from 'vite-plugin-vue-devtools'
+import { viteStaticCopy } from "vite-plugin-static-copy"
+import path from "path";
+
 
 const externalModules = [
   "obsidian",
@@ -28,12 +31,32 @@ export default defineConfig({
     vue(),
     vueJsx(),
     vueDevTools(),
+    viteStaticCopy({
+      targets: [
+        {
+          src: "dist/main.js",
+          dest: path.resolve(__dirname),
+        },
+        {
+          src: "static/manifest.json",
+          dest: path.resolve(__dirname),
+        },
+        {
+          src: "dist/styles.css",
+          dest: path.resolve(__dirname),
+        },
+        {
+          src: "static/data.json",
+          dest: path.resolve(__dirname),
+        },
+      ],
+    })
   ],
   build: {
-    outDir: '.',
+    outDir: 'dist',
     cssCodeSplit: false, // Disable CSS extraction
     cssMinify: true,
-    emptyOutDir: false,
+    emptyOutDir: true,
     lib: {
       entry: 'src/main.ts',
       formats: ['cjs'],
@@ -42,10 +65,13 @@ export default defineConfig({
 
     },
     rollupOptions: {
+      input: "src/main.ts",
       external: externalModules,
       output: {
         manualChunks: undefined, // Disables code splitting for a single bundle
-        assetFileNames: 'styles.css'
+        assetFileNames: 'styles.css',
+        entryFileNames: "main.js",
+        format: "cjs", // Obsidian plugins expect CommonJS
       },
     },
     sourcemap: process.env.NODE_ENV === 'production' ? false : 'inline',

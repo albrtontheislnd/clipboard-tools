@@ -107,7 +107,7 @@ function toInverseCase(str: string): string {
 <template>
 <div><textarea v-model="textContent" class="tbx" placeholder="Type here..."></textarea></div>
 <div class="fitsizer">
-  <template v-for="item in optionsCase">
+  <template v-for="item in optionsCase" :key="item">
     <div class="btnwrapper"><button @click="handleCase(item)" class="insertbtn">{{ item }}</button></div>
   </template>
 </div>
@@ -120,6 +120,7 @@ function toInverseCase(str: string): string {
 
 
 <style scoped>
+
 .tbx {
   @apply w-full h-[150px] font-mono bg-gray-100 border border-gray-300 rounded-lg p-2 resize-none;
 }
