@@ -73,7 +73,7 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 	display(): void {
 		this.saltChecker();
 
-	  let { containerEl } = this;
+	  const { containerEl } = this;
   
 	  containerEl.empty();
   

@@ -69,6 +69,7 @@ const modelScripts = {
 
 export function createModelInstance(mmllmService: AIModel, apiKey: string, app: App | undefined = undefined): Mmllm_OpenAI | Mmllm_GoogleGenerativeAI | Mmllm_TogetherAI | Mmllm_Anthropic | Mmllm_Mistral {
   
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const classMap: { [key: string]: new (mmllmService: AIModel, apiKey: string, app: App | undefined) => any } = {
     'Mmllm_GoogleGenerativeAI': Mmllm_GoogleGenerativeAI,
     'Mmllm_Anthropic': Mmllm_Anthropic,
@@ -98,7 +99,7 @@ export class Mmllm {
 
   // messages-related
   imageSpecs?: imageSpecs;
-  images: Array<string | Blob | TFile | null> = [];
+  images: Array<string | Blob | TFile | ArrayBuffer | Uint8Array<ArrayBufferLike> | null> = [];
 
 
   constructor(mmllmService: AIModel, apiKey: string, app: App | undefined = undefined) {
@@ -109,14 +110,10 @@ export class Mmllm {
   async addImage(blob: Blob): Promise<void> {
     if (blob instanceof Blob) {
       const imageData = await tUtils.getImageData(blob, {
-        // @ts-ignore
-          maxDimensions: this.imageSpecs.maxDimensions,
-          // @ts-ignore
-          maxPixels: this.imageSpecs.maxPixels,
-          // @ts-ignore
-          format: this.imageSpecs.format,
-          // @ts-ignore
-      }, this.imageSpecs.outputType);
+          maxDimensions: <number> this?.imageSpecs?.maxDimensions,
+          maxPixels: <number> this?.imageSpecs?.maxPixels,
+          format: this?.imageSpecs?.format as 'webp' | 'png',
+      }, this?.imageSpecs?.outputType ?? 'DataURL');
 
       this.images.push(imageData);
     } else {
@@ -557,7 +554,7 @@ export class Mmllm_Mistral extends Mmllm implements IMmllm {
         ],
       });
 
-      // @ts-ignore
+      // @ts-expect-error Empty
       return response.choices?.[0]?.message?.content ?? '';
     } else {
       throw new Error(`Model is not an instance of ${this.service.interface}`);
@@ -583,7 +580,7 @@ export class Mmllm_Mistral extends Mmllm implements IMmllm {
         ],
       });
 
-      // @ts-ignore
+      // @ts-expect-error Empty
       return response.choices?.[0]?.message?.content ?? '';
     } else {
       throw new Error(`Model is not an instance of ${this.service.interface}`);

@@ -158,9 +158,7 @@ export class tUtils {
 					'-c:v', 'libaom-av1',           // AVIF codec
 					'-crf', String(tUtils.mapQualityToAvif(quality)),  // Quality setting
 					'-pix_fmt', 'yuv420p',          // 4:2:0 chroma subsampling
-					//'-cpu-used', '4',               // Speed vs quality tradeoff
-					//'-row-mt', '1',                 // Enable row-based multi-threading
-					//'-f', 'avif',                   // Force AVIF format
+					'-f', 'avif',                   // Force AVIF format
 					'pipe:1'                        // Output to stdout
 				];
 				break;
@@ -239,12 +237,19 @@ export class tUtils {
 	 * is not executable, or does not have execute permissions.
 	 */
 	static async findProgPath(filePath: string): Promise<string | null> {
-		const execFile = path.basename(filePath, Platform.isWin ? '.exe' : '').toLowerCase();
-		if (['magick', 'ffmpeg', 'vips'].includes(execFile)) {
+		const exeName = path.basename(filePath, Platform.isWin ? '.exe' : '').toLowerCase();
+		if (['magick', 'ffmpeg', 'vips'].includes(exeName)) {
 			try {
-				await fs.access(filePath, fs.constants.X_OK);
+				if (Platform.isWin) {
+					// On Windows, just check for file existence
+					await fs.access(filePath);
+				} else {
+					// On Unix-like systems, check for executability
+					await fs.access(filePath, fs.constants.X_OK);
+				}
 				return filePath;
 			} catch {
+				console.log(`Failed to access executable at path: ${filePath}`);
 				return null;
 			}
 		}
@@ -269,7 +274,7 @@ export class tUtils {
 
 	/**
 	 * @description
-	 * Generates a random filename in the format `PastedImage_{ISODateTime}_{randomString}.{fileExtension}`,
+	 * Generates a random filename in the format `img_{ISODateTime}_{randomString}.{fileExtension}`,
 	 * where `{ISODateTime}` is the current datetime in ISO format and `{randomString}` is a random 5-character string.
 	 * If `fileExtension` is not provided, the filename will not have an extension.
 	 * 
@@ -277,15 +282,15 @@ export class tUtils {
 	 * @returns {string} - A random filename.
 	 */
 	static randomFilename(fileExtension: string = ''): string {
-		// PastedImage_{randomString}_{ISODateTime}
-		const randomString = Math.random().toString(36).slice(-5);
-		const ISODateTime = new Date().toISOString().replace(/[:.-]/g, '');
+		// img_{randomString}_{ISODateTime}
+		const randomString = Math.random().toString(36).slice(2, 7);
+		const isoDateTime = new Date().toISOString().replace(/[:.-]/g, '');
 		
 		// fileExtension?
-		fileExtension = (fileExtension.length > 0) ? `.${fileExtension.toLowerCase()}` : '';
+		const formattedExtension = (fileExtension.length > 0) ? `.${fileExtension.toLowerCase()}` : '';
 
 		// return filename
-		return `PastedImage_${ISODateTime}_${randomString}${fileExtension}`;
+		return `img_${isoDateTime}_${randomString}${formattedExtension}`;
 	}
 
 	static localPathToPartialUrl(localFilePath: string): string {
@@ -326,6 +331,12 @@ export class tUtils {
 		return sanitized;
 	}
 
+	/**
+	 * Checks if the provided string is a valid HTTP or HTTPS URL.
+	 *
+	 * @param {string} input - The string to validate as a URL.
+	 * @returns {boolean} - Returns true if the input is a valid HTTP or HTTPS URL, otherwise false.
+	 */
 	static isValidHttpUrl(input: string): boolean {
 		try {
 		  // Create a URL object to validate the input
@@ -337,23 +348,22 @@ export class tUtils {
 		  // If URL construction throws, it's not a valid URL
 		  return false;
 		}
-	  }
-
+	}
+     
     /**
-     * Given a blob, returns a resized version of the image as a blob or as a data URL.
-     * 
-     * @param blob - The blob to resize.
-     * @param imageSpecs - An object containing the resizing parameters.
-     * @param getResultAs - The format of the result. One of 'Blob', 'DataURL', or 'TFile'.
-     * @param appRef - An optional reference to the app instance. Required if getResultAs is 'TFile'.
-     * @returns A promise that resolves to the resized image as a blob, data URL, or TFile, or null if there was an error.
-     */
-    static async getImageData(blob: Blob, imageSpecs: {
+	 * Resizes and converts an image blob, returning the result in various formats.
+	 * @param blob - The image blob to process.
+	 * @param imageSpecs - Object specifying maxDimensions, maxPixels, and output format.
+	 * @param getResultAs - Desired output type ('Blob', 'ArrayBuffer', 'Uint8Array', 'TFile', 'DataURL', 'Base64').
+	 * @param appRef - Optional Obsidian App reference for TFile output.
+	 * @returns The processed image in the requested format, or null on error.
+	 */
+	static async getImageData(blob: Blob, imageSpecs: {
         maxDimensions: number,
         maxPixels: number,
         format: 'png' | 'webp',  
     }, getResultAs: 'Blob' | 'ArrayBuffer' | 'Uint8Array' | 'TFile' | 'DataURL' | 'Base64',
-		appRef?: App): Promise<null | Blob | TFile | string> {
+		appRef?: App): Promise<null | Blob | TFile | string | ArrayBuffer | Uint8Array> {
 		try {
             const img = await createImageBitmap(blob);
         
@@ -404,10 +414,13 @@ export class tUtils {
 						}
 					}
 					return null;
-
 				case 'Base64':
 					const _base64Data = (await tUtils.blobToBase64(resizedBlob)).toString();
 					return _base64Data.split(',')[1];
+				case 'ArrayBuffer':
+    				return await resizedBlob.arrayBuffer();
+				case 'Uint8Array':
+    				return new Uint8Array(await resizedBlob.arrayBuffer());
                 default:
                     return null;
             }
