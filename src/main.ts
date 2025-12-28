@@ -18,7 +18,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	  }
 	
 	async saveSettings() {
-	await this.saveData(this.settings);
+		await this.saveData(this.settings);
 	}
 
 	async onload() {
