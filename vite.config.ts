@@ -68,7 +68,7 @@ export default defineConfig({
       input: "src/main.ts",
       external: externalModules,
       output: {
-        manualChunks: undefined, // Disables code splitting for a single bundle
+        manualChunks: () => 'main', // Disables code splitting for a single bundle
         assetFileNames: 'styles.css',
         entryFileNames: "main.js",
         format: "cjs", // Obsidian plugins expect CommonJS

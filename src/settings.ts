@@ -6,18 +6,18 @@ import { createApp } from 'vue';
 import { App as vueApp } from 'vue';
 import APIKeysEditor from './components/APIKeysEditor.vue';
 import S3SettingsEditor from './components/S3SettingsEditor.vue';
-
 import { tSecureString } from "./secure";
 import { aiModelsList } from "./aimodels";
 
-
 export const DEFAULT_SETTINGS: Partial<ImgOptimizerPluginSettings> = {
 	salt: '',
-	imageFormat: 'webp',
-	compressionLevel: 90,
+	imageFormat: 'avif',
+	compressionLevel: 70,
 	binExec: '',
+	apiServer: 'http://localhost:5764',
 	aiModel: '0',
 	aiModelAPIKeys: {},
+	useS3Storage: true,
 	s3Settings: {
 		enabled: false,
 	},
@@ -28,11 +28,9 @@ export const ConfigValues = {
 	aiModels: aiModelsList,
 };
 
-const validFormatsOptions: Record<string, string> = ConfigValues.validFormats.reduce((acc, item) => {
-	acc[item] = item.toUpperCase();
-	return acc;
-  }, {} as Record<string, string>);
+const validFormatsOptions: Record<string, string> = Object.fromEntries(ConfigValues.validFormats.map(item => [item, item]));
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const validAIModelsOptions: Record<string, string> = ConfigValues.aiModels.reduce((acc, item: AIModel, _index) => {
 	acc[`${item.platform_id}/${item.model_id}`] = `${item.model_id} (${item.platform_id})`;
 return acc;
@@ -85,26 +83,26 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 			.addOptions(validFormatsOptions)
 			.setValue(this.plugin.settings?.imageFormat as string)
 			.onChange(async (value: string) => {
-				// @ts-ignore
+				// @ts-expect-error Suppress
 				this.plugin.settings.imageFormat = ConfigValues.validFormats.includes(value.toLowerCase()) ? value.toLowerCase() : "webp";
 				await this.plugin.saveSettings();
 			})
 		);
 
 		new Setting(containerEl)
-		// @ts-ignore
+		// @ts-expect-error Suppress
 		.setName(`Compression Level (current value: ${this.plugin.settings.compressionLevel})`)
 		.setDesc('A Number between 0 and 100 indicating the image quality')
 		.addSlider((cp) =>
 			cp
 			.setLimits(1, 100, 1)
-			// @ts-ignore
+			// @ts-expect-error Suppress
 			.setValue(this.plugin.settings.compressionLevel)
 			.setDynamicTooltip()
 			.onChange(async (value: number) => {
 				// validation
 				const compressionLevel = Math.min(100, Math.max(1, Math.floor(value))) || 90;
-				// @ts-ignore
+				// @ts-expect-error Suppress
 				this.plugin.settings.compressionLevel = compressionLevel;
 				await this.plugin.saveSettings();
 			})
@@ -117,12 +115,40 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 		.addText((text) =>
 			text
 			.setPlaceholder('magick')
-			// @ts-ignore
+			// @ts-expect-error Suppress
 			.setValue(String(this.plugin.settings.binExec))
 			.onChange(async (value) => {
 				// validation
-				// @ts-ignore
+				// @ts-expect-error Suppress
 				this.plugin.settings.binExec = value.trim();
+				await this.plugin.saveSettings();
+			})
+		);
+
+		// Local API server URL
+		new Setting(containerEl)
+		.setName('Local API Server')
+		.setDesc('Example: http://localhost:3000')
+		.addText((text) =>
+			text
+			.setPlaceholder('http://localhost:3000')
+			.setValue(String(this.plugin.settings?.apiServer))
+			.onChange(async (value) => {
+				// validation
+				this.plugin.settings!.apiServer = value.trim();
+				await this.plugin.saveSettings();
+			})
+		);
+
+		// Use S3 Storage setting
+		new Setting(containerEl)
+		.setName('Use S3 Storage')
+		.setDesc('Enable the use of S3 storage for uploads')
+		.addToggle((toggle) =>
+			toggle
+			.setValue(this.plugin.settings?.useS3Storage ?? false)
+			.onChange(async (value) => {
+				this.plugin.settings!.useS3Storage = value;
 				await this.plugin.saveSettings();
 			})
 		);
@@ -134,7 +160,7 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 		.addDropdown((text) =>
 			text
 			.addOptions(validAIModelsOptions)
-			// @ts-ignore
+			// @ts-expect-error Suppress
 			.setValue(this.plugin.settings.aiModel)
 			.onChange(async (value: string) => {
 				// validation
@@ -145,11 +171,13 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 			})
 		);
 
+		
+
 		// Create a setting with a button
 		new Setting(containerEl)
 		.setName('AI Models - API Key Editor')
 		.setDesc("Click the button to open API Key Editor.")
-		.addButton((btn) => 
+		.addButton((btn) =>
 			btn
 			.setButtonText("API Key Editor")
 			.setCta()
@@ -174,6 +202,8 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 				}
 			})
 		);
+
+
 
 		// S3 Image Upload settings
 		new Setting(containerEl)

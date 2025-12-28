@@ -5,10 +5,12 @@ export interface ImgOptimizerPluginSettings {
 	imageFormat: string; // webp | avif | png
 	compressionLevel: number,
 	binExec: string,
+	apiServer: string,
 	aiModel: string,
 	aiModelAPIKeys: StringKeyObject,
+	useS3Storage: boolean,
 	s3Settings: ImgS3PluginSettings,
-} 
+}
 
 export interface ImgS3PluginSettings {
 	enabled: boolean,

@@ -1,12 +1,11 @@
-import { Editor, FileSystemAdapter, MarkdownFileInfo, MarkdownView, Notice, Plugin, TFile } from 'obsidian';
+import { Editor, MarkdownView, Notice, Plugin } from 'obsidian';
+import axios from 'axios';
 import { tUtils } from './utils';
 import { ConfigValues, DEFAULT_SETTINGS, ImgOptimizerPluginSettingsTab } from './settings';
-import { AIModel, ImageFileObject, ImgOptimizerPluginSettings, stringOrEmptySchema } from './interfaces';
+import { AIModel, ImgOptimizerPluginSettings, stringOrEmptySchema } from './interfaces';
 import { ImageTextModal } from './aiprompt_modal';
 import { createModelInstance } from './aiprompt';
 import { ChangeCaseModal } from './changecase_modal';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-//import { readFile } from 'fs/promises';
 
 
 export default class ImgWebpOptimizerPlugin extends Plugin {
@@ -25,40 +24,6 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		this.app.workspace.onLayoutReady(async () => {
 			await this.loadSettings();
 			this.addSettingTab(new ImgOptimizerPluginSettingsTab(this.app, this));
-
-			// This adds an editor command that can perform some operation on the current editor instance
-			this.addCommand({
-				id: 'paste-optimized-img',
-				name: 'Embed clipboard image in WEBP/AVIF/PNG/JPEG format',
-				editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
-					if (view instanceof MarkdownView) {
-						// Handle the case where ctx is a MarkdownFileInfo
-						await this.handleClipboardImage(editor, view);
-					}
-				}
-			});
-
-			this.addCommand({
-				id: 's3-optimized-img',
-				name: 'Optimize and save to S3 Storage',
-				editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
-					if (view instanceof MarkdownView) {
-						// Handle the case where ctx is a MarkdownFileInfo
-						await this.handleClipboardImage(editor, view, true);
-					}
-				}
-			});
-
-			this.addCommand({
-				id: 'ai-convert-md',
-				name: 'Convert clipboard image to Markdown/Latex',
-				editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
-					if (view instanceof MarkdownView) {
-						// Handle the case where ctx is a MarkdownFileInfo
-						await this.handleOCR(editor, view);
-					}
-				}
-			});
 
 			// editor-menu
 			this.registerEvent(
@@ -81,7 +46,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 
 						menu.addItem((item) => {
 							item.setTitle(`Clipboard: Upload ${this.settings?.imageFormat.toUpperCase()} image to S3`).setIcon('image-plus')
-								.onClick(async () => await this.handleClipboardImage(editor, view, true));
+								.onClick(async () => await this.handleClipboardImage(editor, view, this.settings?.useS3Storage));
 						});
 
 						menu.addItem((item) => {
@@ -99,168 +64,106 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		});
 	}
 
-	/**
-	 * Process a given blob by converting it to the specified format (WEBP, JPEG, or PNG)
-	 * @param {Blob} blob - The blob to process
-	 * @param {string} format - The target format ('webp', 'jpeg', or 'png')
-	 * @returns {Promise<ImageFileObject | null>} - A promise that resolves to an ImageFileObject containing
-	 * the converted image buffer, mime-type, file extension, and a randomly generated filename
-	 */
-	async ProcessImage(blob: Blob, format: 'webp' | 'jpeg' | 'png'): Promise<ImageFileObject | null> {
-		const file: ImageFileObject = {
-			mimeType: `image/${format}`,
-			fileExtension: format,
-			buffer: null,
-			randomFilename: '',
-		};
-
-		if (format === 'png') {
-			file.buffer = await blob.arrayBuffer();
-		} else {
-			const quality = this.settings ? this.settings.compressionLevel / 100 : 0.9;
-
-			try {
-				// Create an OffscreenCanvas
-				const imgBitmap = await createImageBitmap(blob);
-				const offscreenCanvas = new OffscreenCanvas(imgBitmap.width, imgBitmap.height);
-				const ctx = offscreenCanvas.getContext("2d");
-				ctx?.drawImage(imgBitmap, 0, 0);
-				
-				const imgBlob = await new Promise<Blob>((resolve) => {
-					offscreenCanvas.convertToBlob({ type: file.mimeType, quality: quality }).then(resolve);
-				});
-
-				file.buffer = await imgBlob.arrayBuffer();
-			} catch (error) {
-				// encoding error!
-				// return as PNG
-				file.mimeType = 'image/png';
-				file.fileExtension = 'png';
-				file.buffer = await blob.arrayBuffer();
-				console.error(`ProcessImage() error: ${error}`);
-			}
-		}
-
-		// generate random filename
-		file.randomFilename = tUtils.randomFilename(file.fileExtension);
-		return file;
-	}
-
-	/**
-	 * Process a given blob by converting it to an AVIF buffer using the `convertImage` helper function.
-	 * @param {Blob} blob - The blob to process.
-	 * @returns {Promise<ImageFileObject | null>} - A promise that resolves to an ImageFileObject containing
-	 * the converted image buffer, mime-type, file extension, and a randomly generated filename.
-	 * If the conversion fails, the original image buffer is returned, encoded as PNG.
-	 */
-	async ProcessAVIF(blob: Blob): Promise<ImageFileObject | null> {
-		const file: ImageFileObject = {
-			mimeType: 'image/avif',
-			fileExtension: 'avif',
-			buffer: null,
-			randomFilename: '',
-		};
-
-		const adapter = <FileSystemAdapter> this.app.vault.adapter;
-		const tempFilename = tUtils.randomFilename();
-
-		// 1, we save a PNG file
-		const tempPNG_normalizedPath = await this.app.fileManager.getAvailablePathForAttachment(`${tempFilename}.png`);
-		const tempPNG_absolutePath = adapter.getFullPath(tempPNG_normalizedPath);
-		const tempPNGFile = await this.app.vault.createBinary(tempPNG_normalizedPath, <ArrayBuffer> (await blob.arrayBuffer()));
-		
-		// 2, get output filename for AVIF
-		const tempAVIF_normalizedPath = await this.app.fileManager.getAvailablePathForAttachment(`${tempFilename}.avif`);
-		// const tempAVIF_absolutePath = adapter.getFullPath(tempAVIF_normalizedPath);
-
-		// 3, convert using commandline tools
-/* 		const execResult = await tUtils.convertImage(
-			this.settings?.binExec as string,
-			tempPNG_absolutePath, 
-			tempAVIF_absolutePath, 
-			this.settings?.compressionLevel as number);
-
-		console.log(execResult.stderr, execResult.stdout, execResult.result); */
-
-		const execResult = await tUtils.convertImageToBuffer(
-			this.settings?.binExec as string,
-			tempPNG_absolutePath, 
-			this.settings?.compressionLevel as number);
-
-		console.log(execResult.data?.byteLength, execResult.stderr, execResult.stdout, execResult.result); 
-
-		// 4, check
-/* 		const _file = this.app.vault.getFileByPath(tempAVIF_normalizedPath);
-		console.log(_file); */
-
-		const _file = execResult.data ? await this.app.vault.createBinary(tempAVIF_normalizedPath, execResult.data) : null;
-		console.log(_file);
-
-		if(_file instanceof TFile) { // success!
-			this.app.fileManager.trashFile(tempPNGFile); // we don't need it anymore
-			file.buffer = null;
-			file.randomFilename = `${tempFilename}.avif`;
-			file.hasTFile = _file;
-		} else { // failed, PNG fallback
-			file.mimeType = 'image/png';
-			file.fileExtension = 'png';
-			file.buffer = null;
-			file.randomFilename = `${tempFilename}.png`;
-			file.hasTFile = tempPNGFile;
-		}
-
-		return file;
-	}
-
-	/**
-	 * A wrapper function for converting a blob to a file that can be embedded
-	 * in a markdown file. The returned string is the path of the created file.
-	 * @param {Blob} blob - The blob to convert.
-	 * @returns {Promise<string | null>} - A promise that resolves to the path of the created file, or null.
-	 */
 	async convertWrapper(blob: Blob, forceS3Upload: boolean = false): Promise<string | null> {
 
-		/**
-		 * Converts a given blob to a specific image format and returns an object with the converted buffer, mime-type, file extension, and a random filename.
-		 * @param {Blob} blob - The blob to convert.
-		 * @param {string} imageFormat - The desired image format. One of 'webp', 'png', 'avif', or 'jpeg'.
-		 * @returns {Promise<ImageFileObject | null>} - A promise that resolves to an object with the converted buffer, mime-type, file extension, and a random filename, or null if the conversion fails.
-		 */
-		const convertTo = async (): Promise<ImageFileObject | null> => {
-			switch (this.settings?.imageFormat) {
-				case 'webp': return this.ProcessImage(blob, 'webp');
-				case 'png': return this.ProcessImage(blob, 'png');
-				case 'avif': return this.ProcessAVIF(blob);
-				case 'jpeg': return this.ProcessImage(blob, 'jpeg');
-				default: return null;
-			}
-		};
+		const defaultImageFormat = 'avif';
+		const defaultCompressionLevel = 70;
 
-		const fileObject = await convertTo();
-		if (fileObject !== null) {
-			let file: TFile;
+		try {
+			if (!forceS3Upload) {
+				// Local upload: use multipart/form-data with file upload
+				const endpointUrl = `${this.settings?.apiServer}/images/transform_download`;
 
-			if(fileObject?.hasTFile instanceof TFile) {
-				file = <TFile> fileObject.hasTFile;
+				// Create FormData for local uploads (multipart/form-data with file upload)
+				const formData = new FormData();
+				formData.append('image', blob, 'image.png'); // Attach blob as file
+				formData.append('format_to', this.settings?.imageFormat || defaultImageFormat);
+				formData.append('quality', (this.settings?.compressionLevel || defaultCompressionLevel).toString());
+
+				// Make the HTTP POST request using axios with FormData
+				const response = await axios.post(endpointUrl, formData, {
+					headers: {
+						'Content-Type': 'multipart/form-data',
+					},
+					responseType: 'arraybuffer', // Response will be binary image data
+				});
+
+				// For local storage, response should be binary image data directly
+				try {
+					// Use response data directly as ArrayBuffer (binary image data)
+					const imageBuffer = response.data as ArrayBuffer;
+
+					const fileExtension = this.settings?.imageFormat || defaultImageFormat;
+					const randomFilename = tUtils.randomFilename(fileExtension);
+
+					const filePath = await this.app.fileManager.getAvailablePathForAttachment(randomFilename);
+					const file = await this.app.vault.createBinary(filePath, imageBuffer);
+
+					return file.path;
+				} catch (parseError) {
+					console.error('Failed to save binary response:', parseError);
+					new Notice('Failed to save the processed image');
+					return null;
+				}
 			} else {
-				const filePath = await this.app.fileManager.getAvailablePathForAttachment(fileObject.randomFilename);
-				file = await this.app.vault.createBinary(filePath, <ArrayBuffer> fileObject.buffer);
+				// S3 upload: use multipart/form-data with JSON response
+				const endpointUrl = `${this.settings?.apiServer}/images/transform_save_s3`;
+
+				// Create S3 path
+				const local_path = await this.app.fileManager.getAvailablePathForAttachment('img');
+				const s3_path = `${tUtils.slugifyVaultName(this.app.vault.getName())}/${tUtils.localPathToPartialUrl(local_path)}/${tUtils.randomFilename()}`;
+
+				// Create FormData for S3 uploads (multipart/form-data with file upload)
+				const formData = new FormData();
+				formData.append('image', blob, 'image.png'); // Attach blob as file
+				formData.append('format_to', this.settings?.imageFormat || defaultImageFormat);
+				formData.append('quality', (this.settings?.compressionLevel || defaultCompressionLevel).toString());
+				formData.append('s3_path', s3_path);
+
+				// Make the HTTP POST request using axios with FormData
+				const response = await axios.post(endpointUrl, formData, {
+					headers: {
+						'Content-Type': 'multipart/form-data',
+					},
+					responseType: 'json', // Server returns JSON response for S3
+				});
+
+				// For S3 upload, handle the JSON response
+				try {
+					const responseData = response.data as {
+						success: boolean;
+						errors?: string;
+						messages?: string;
+						result?: { url: string };
+					};
+
+					if (responseData.success === true && responseData.result?.url) {
+						// Success - return the S3 URL
+						console.log(`S3 upload successful: ${responseData.messages || 'Image uploaded'}`);
+						return responseData.result.url;
+					} else {
+						// Handle API errors
+						const errorMsg = responseData.errors || 'Unknown S3 upload error';
+						console.error('S3 upload failed:', errorMsg);
+						new Notice(`S3 upload failed: ${errorMsg}`);
+						return null;
+					}
+				} catch (parseError) {
+					console.error('Failed to parse S3 response as JSON:', parseError);
+					new Notice('Failed to parse S3 upload response');
+					return null;
+				}
 			}
 
-			// S3 hook
-			if(this.settings?.s3Settings.enabled === true && forceS3Upload === true) {
-				new Notice(`Uploading image to your S3 service...`);
-				const s3Url = await this.uploadToS3(file, fileObject);
-				return s3Url;
-			} else {
-				return file.path;
-			}
-			// end: S3 hook
+		} catch (error: unknown) {
+			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+			console.error('Error processing image with API:', error);
+			new Notice(`Failed to process image: ${errorMessage}`);
 		}
 
+		// if error
 		return null;
 	}
-
 
 	/**
 	 * Return the AI model instance and its API key from the settings.
@@ -284,6 +187,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 
     async convertImageToMarkdown(blob: Blob): Promise<string | null> {
 		const { aiModel, aiModel_APIKey } = await this.obtainAIModelInfo();
+		let resultText = '';
 
 		try {
 			if(aiModel === undefined) throw "AI Model not found.";
@@ -293,20 +197,14 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			const msg = `Interacting with ${aiModel.model_id}`;
 			console.log(msg);
 			new Notice(msg);
-		} catch (error) {
-			new Notice(error as string);
-			return null;
-		}
 
-		let resultText = '';
-		try {
-			const modelInstance = createModelInstance(aiModel, aiModel_APIKey, this.app);
+			const modelInstance = createModelInstance(aiModel!, aiModel_APIKey, this.app);
 			modelInstance.init();
 			await modelInstance.addImage(blob);
 			resultText = await modelInstance.taskOCR();
 		} catch (error) {
 			console.log(error);
-			resultText = `Error in calling AI Model: ${aiModel.model_id}.\n${error}`;
+			resultText = `Error in calling AI Model: ${aiModel?.model_id || 'Unknown'}.\n${error}`;
 		}
 
 		return resultText;
@@ -361,6 +259,8 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	 * @param editor - The markdown editor where the image and text will be embedded.
 	 * @param _view - The markdown view associated with the editor.
 	 */
+     
+	// TODO: fix
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     async handleOCR(editor: Editor, _view: MarkdownView) {
 		const clipboardItems = await navigator.clipboard.read();
@@ -532,48 +432,4 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		  // Replace the selected text with the callout block
 		  editor.replaceSelection(calloutContent);
     }
-
-	async uploadToS3(file: TFile, fileObject: ImageFileObject): Promise<string | null> {
-		try {
-		  // 1. Get the file content
-		  const fileContent = await this.app.vault.readBinary(file);
-	
-		  // 2. Configure S3 Client
-		  const s3 = new S3Client({
-			region: this.settings?.s3Settings.region,
-			endpoint: this.settings?.s3Settings.endpoint,
-			credentials: {
-			  accessKeyId: this.settings?.s3Settings.accessKey ?? '',
-			  secretAccessKey: this.settings?.s3Settings.secret ?? '',
-			},
-		  });
-	
-		  // 3. Upload the file to S3
-		  // Use the file's path as the S3 key
-		  const key = `${tUtils.slugifyVaultName(this.app.vault.getName())}/${tUtils.localPathToPartialUrl(file.path)}`;
-		  
-		  const uploadParams = {
-			Bucket: this.settings?.s3Settings.bucket,
-			Key: key,
-			Body: new Uint8Array(fileContent), // Convert ArrayBuffer to Uint8Array
-			ContentType: fileObject.mimeType,
-		  };
-	
-		  await s3.send(new PutObjectCommand(uploadParams));
-	
-		  // 4. Construct the S3 file URL
-		  const s3Url = (new URL(key, this.settings?.s3Settings.publicURLPrefix)).toString();
-	
-		  // 5. Delete the local file
-		  await this.app.vault.delete(file);
-	
-		  // 6. Return the S3 file URL
-		  return s3Url;
-		} catch (error) {
-		  console.error('Error uploading to S3:', error);
-
-		  // return local file path
-		  return file.path;
-		}
-	  }
 }
