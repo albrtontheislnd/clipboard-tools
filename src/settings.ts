@@ -1,40 +1,19 @@
-import { App, Modal, PluginSettingTab, Setting } from "obsidian";
+import { App, PluginSettingTab, Setting } from "obsidian";
 import ImgWebpOptimizerPlugin from "./main";
-import { ImgOptimizerPluginSettings, AIModel, AIModelSetting, AIModelSetting_Result, ImgS3PluginSettings, ImgS3PluginSettings_Result } from "./interfaces";
-import { tUtils } from "./utils";
-import { createApp } from 'vue';
-import { App as vueApp } from 'vue';
-import APIKeysEditor from './components/APIKeysEditor.vue';
-import S3SettingsEditor from './components/S3SettingsEditor.vue';
-import { tSecureString } from "./secure";
-import { aiModelsList } from "./aimodels";
+import { ImgOptimizerPluginSettings } from "./interfaces";
 
 export const DEFAULT_SETTINGS: Partial<ImgOptimizerPluginSettings> = {
-	salt: '',
 	imageFormat: 'avif',
 	compressionLevel: 70,
-	binExec: '',
 	apiServer: 'http://localhost:5764',
-	aiModel: '0',
-	aiModelAPIKeys: {},
 	useS3Storage: true,
-	s3Settings: {
-		enabled: false,
-	},
   };
 
 export const ConfigValues = {
 	validFormats: ["webp", "png", "avif", "jpeg"],
-	aiModels: aiModelsList,
 };
 
 const validFormatsOptions: Record<string, string> = Object.fromEntries(ConfigValues.validFormats.map(item => [item, item]));
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const validAIModelsOptions: Record<string, string> = ConfigValues.aiModels.reduce((acc, item: AIModel, _index) => {
-	acc[`${item.platform_id}/${item.model_id}`] = `${item.model_id} (${item.platform_id})`;
-return acc;
-}, {} as Record<string, string>);
 
 export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 	plugin: ImgWebpOptimizerPlugin;
@@ -49,18 +28,6 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 	  this.plugin = plugin;
 	}
 
-	saltChecker(): void {
-		// salt
-		if(this.plugin.settings?.salt.trim().length == 0) {
-			this.plugin.settings.salt = tSecureString.generateRandomString();
-			this.plugin.saveSettings().then(() => {
-				this.loadedSalt = true;
-			});
-		} else {
-			this.loadedSalt = true;
-		}
-	}
-
 	/**
 	 * @description
 	 * This method is called when the user navigates to the plugin's settings tab.
@@ -69,8 +36,6 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 	 * @method display
 	 */
 	display(): void {
-		this.saltChecker();
-
 	  const { containerEl } = this;
   
 	  containerEl.empty();
@@ -109,22 +74,6 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 			.showTooltip()
 		);
 
-		new Setting(containerEl)
-		.setName('Absolute executable path to ImageMagick/FFMPEG/libvips command line (only for AVIF)')
-		.setDesc('Example: /opt/homebrew/bin/magick')
-		.addText((text) =>
-			text
-			.setPlaceholder('magick')
-			// @ts-expect-error Suppress
-			.setValue(String(this.plugin.settings.binExec))
-			.onChange(async (value) => {
-				// validation
-				// @ts-expect-error Suppress
-				this.plugin.settings.binExec = value.trim();
-				await this.plugin.saveSettings();
-			})
-		);
-
 		// Local API server URL
 		new Setting(containerEl)
 		.setName('Local API Server')
@@ -153,204 +102,10 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 			})
 		);
 
-		// AI Models
-		new Setting(containerEl)
-		.setName('AI Model')
-		.setDesc('Select an AI model (image to md/latex)')
-		.addDropdown((text) =>
-			text
-			.addOptions(validAIModelsOptions)
-			// @ts-expect-error Suppress
-			.setValue(this.plugin.settings.aiModel)
-			.onChange(async (value: string) => {
-				// validation
-				if(this.plugin.settings) {
-					this.plugin.settings.aiModel = value;
-					await this.plugin.saveSettings();
-				}
-			})
-		);
-
-		
-
-		// Create a setting with a button
-		new Setting(containerEl)
-		.setName('AI Models - API Key Editor')
-		.setDesc("Click the button to open API Key Editor.")
-		.addButton((btn) =>
-			btn
-			.setButtonText("API Key Editor")
-			.setCta()
-			.onClick(async () => {
-				if (this.plugin.settings && this.loadedSalt == true) {
-					const ed = new APIKeysEditorModal(this.app, this.plugin.settings);
-					const apiKeys: AIModelSetting_Result = await ed.openWithPromise();
-
-					if(apiKeys.action == 'save') {
-					try {
-						for (const item of apiKeys.values) {
-							const h = await tUtils.encodeRawApiKey(item.rawApiKey, item.settingKey, this.app, this.plugin.settings as ImgOptimizerPluginSettings);
-							this.plugin.settings.aiModelAPIKeys[item.settingKey] = h;
-						}
-						await this.plugin.saveSettings();
-					} catch (error) {
-						console.log(error);
-					}
-					}
-				} else {
-					console.error('Plugin settings are not defined');
-				}
-			})
-		);
-
-
-
-		// S3 Image Upload settings
-		new Setting(containerEl)
-		.setName('S3 Image Upload')
-		.setDesc("Click the button to open S3 Image Upload settings.")
-		.addButton((btn) => 
-			btn
-			.setButtonText("S3 Image Upload settings")
-			.setCta()
-			.onClick(async () => {
-				if (this.plugin.settings) {
-					const ed = new S3SettingsModal(this.app, this.plugin.settings);
-					const imgS3: ImgS3PluginSettings_Result = await ed.openWithPromise();
-
-					if(imgS3.action == 'save') {
-						try {
-							this.plugin.settings.s3Settings = imgS3.values;
-							await this.plugin.saveSettings();
-						} catch (error) {
-							console.log(error);
-						}
-					}
-				} else {
-					console.error('Plugin settings are not defined');
-				}
-			})
-		);
 
 	}
   }
 
-// S3 Settings Modal
-class S3SettingsModal extends Modal {
-	private vueApp: vueApp<Element> | null = null;
-	private inputValue: ImgS3PluginSettings = {
-		enabled: false
-	};
-	private action: 'cancel' | 'save' = 'cancel';
-	private settings: ImgOptimizerPluginSettings | undefined = undefined;
-	constructor(app: App, settings: ImgOptimizerPluginSettings) {
-	  super(app);
-	  this.settings = settings;
-	}
 
-	async openWithPromise(): Promise<ImgS3PluginSettings_Result> {
-		const p = new Promise<ImgS3PluginSettings_Result>((resolve) => {
-			this.onClose = () => {
-				resolve({
-					action: this.action,
-					values: this.inputValue,
-				});
-				this.vueApp?.unmount();
-				this.contentEl.empty();
-			};
-		});
 
-		if (this.settings) {
-			this.inputValue = this.settings.s3Settings;
-		} else {
-			// handle the case where this.settings is undefined
-			// do nothing!
-		}
 
-		this.openModal();
-		return p;
-	}
-
-	private openModal() {
-		if (!this.vueApp) {
-			this.vueApp = createApp(S3SettingsEditor, {
-				close: this.close.bind(this),
-				updateSettings: (data: ImgS3PluginSettings, action: 'save' | 'cancel') => {
-					console.log(action);
-					if(action == 'save') {
-						this.inputValue = data;
-						this.action = 'save';
-					} else {
-						this.inputValue = this.settings?.s3Settings ?? this.inputValue;
-						this.action = 'cancel';
-					}
-					
-					this.close();
-				},
-				values: this.inputValue,
-			});
-			this.vueApp.mount(this.containerEl.children[1]);
-		}
-
-		this.open();
-	}
-  }
-
-// Custom Modal
-class APIKeysEditorModal extends Modal {
-	private vueApp: vueApp<Element> | null = null;
-	private inputValue: AIModelSetting[] = [];
-	private action: 'cancel' | 'save' = 'cancel';
-	private settings: ImgOptimizerPluginSettings | undefined = undefined;
-	constructor(app: App, settings: ImgOptimizerPluginSettings) {
-	  super(app);
-	  this.settings = settings;
-	}
-
-	async openWithPromise(): Promise<AIModelSetting_Result> {
-		const p = new Promise<AIModelSetting_Result>((resolve) => {
-			this.onClose = () => {
-				resolve({
-					action: this.action,
-					values: this.inputValue,
-				});
-				this.vueApp?.unmount();
-				this.contentEl.empty();
-			};
-		});
-
-		if (this.settings) {
-			this.inputValue = await tUtils.generateApiKeyFields(this.settings, this.app);
-		} else {
-			// handle the case where this.settings is undefined
-			this.inputValue = [];
-		}
-
-		this.openModal();
-		return p;
-	}
-
-	private openModal() {
-		if (!this.vueApp) {
-			this.vueApp = createApp(APIKeysEditor, {
-				close: this.close.bind(this),
-				updateSettings: (data: AIModelSetting[], action: 'save' | 'cancel') => {
-					console.log(action);
-					if(action == 'save') {
-						this.inputValue = data;
-						this.action = 'save';
-					} else {
-						this.inputValue = [];
-						this.action = 'cancel';
-					}
-					
-					this.close();
-				},
-				values: this.inputValue,
-			});
-			this.vueApp.mount(this.containerEl.children[1]);
-		}
-
-		this.open();
-	}
-  }

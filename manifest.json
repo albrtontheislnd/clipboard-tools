@@ -1,6 +1,6 @@
 {
-	"id": "clipboard-tools",
-	"name": "Clipboard Tools: Optimizer & Conversion",
+	"id": "alapaki-tools",
+	"name": "Alapaki Tools",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
 	"description": "Optimize clipboard images with WEBP/AVIF formats. Leverages AI models to convert them to Markdown/LaTeX.",

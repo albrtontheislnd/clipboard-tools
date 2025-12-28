@@ -1,12 +1,13 @@
 import { Editor, MarkdownView, Notice, Plugin } from 'obsidian';
 import axios from 'axios';
 import { tUtils } from './utils';
-import { ConfigValues, DEFAULT_SETTINGS, ImgOptimizerPluginSettingsTab } from './settings';
-import { AIModel, ImgOptimizerPluginSettings, stringOrEmptySchema } from './interfaces';
+import { DEFAULT_SETTINGS, ImgOptimizerPluginSettingsTab } from './settings';
+import { ImgOptimizerPluginSettings } from './interfaces';
 import { ImageTextModal } from './aiprompt_modal';
-import { createModelInstance } from './aiprompt';
 import { ChangeCaseModal } from './changecase_modal';
-
+import { LoadingModal } from './loadingmodal';
+import { convertImageToMarkdown, insertContent } from './ocr-utils';
+import path from 'path';
 
 export default class ImgWebpOptimizerPlugin extends Plugin {
 	settings?: ImgOptimizerPluginSettings;
@@ -31,7 +32,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 					if (view instanceof MarkdownView) {
 						menu.addItem((item) => {
 							item.setTitle(`Clipboard: Change Case`).setIcon('case-sensitive')
-								.onClick(async () => await this.handleChangeCase(editor, view));
+								.onClick(async () => await this.handleChangeCase(editor));
 						});
 
 						menu.addItem((item) => {
@@ -51,7 +52,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 
 						menu.addItem((item) => {
 							item.setTitle(`Clipboard: Image 2 Markdown`).setIcon('brain-circuit')
-								.onClick(async () => await this.handleOCR(editor, view));
+								.onClick(async () => await this.handleOCR(editor));
 						});
 
 						menu.addItem((item) => {
@@ -64,6 +65,14 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		});
 	}
 
+	/**
+	 * Converts an image blob to the specified format and compression level,
+	 * and either uploads it to S3 or saves it locally.
+	 * @param blob - The image blob to process.
+	 * @param forceS3Upload - If true, forces the image to be uploaded to S3.
+	 * @returns A promise that resolves to a string containing the S3 URL or local file path,
+	 * or null on error.
+	 */
 	async convertWrapper(blob: Blob, forceS3Upload: boolean = false): Promise<string | null> {
 
 		const defaultImageFormat = 'avif';
@@ -110,7 +119,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 				const endpointUrl = `${this.settings?.apiServer}/images/transform_save_s3`;
 
 				// Create S3 path
-				const local_path = await this.app.fileManager.getAvailablePathForAttachment('img');
+				const local_path = path.dirname(await this.app.fileManager.getAvailablePathForAttachment('file.bin'));
 				const s3_path = `${tUtils.slugifyVaultName(this.app.vault.getName())}/${tUtils.localPathToPartialUrl(local_path)}/${tUtils.randomFilename()}`;
 
 				// Create FormData for S3 uploads (multipart/form-data with file upload)
@@ -165,104 +174,16 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		return null;
 	}
 
-	/**
-	 * Return the AI model instance and its API key from the settings.
-	 * @returns a tuple of the AI model instance and the API key.
-	 * The AI model instance is undefined if the model specified in the settings is not found.
-	 */
-	async obtainAIModelInfo(): Promise<{ aiModel: AIModel | undefined, aiModel_APIKey: string }> {
-		const findAIModel = (): AIModel | undefined => {		
-			const [platformId, modelId] = tUtils.splitAtFirst(this.settings?.aiModel as string, '/');
-			if(!platformId || !modelId) return undefined;
-			return ConfigValues.aiModels.find(item => item.model_id === modelId && item.platform_id === platformId);
-		};
 
-		const aiModel = findAIModel();
-		const aiModel_APIKey = await tUtils.getRawApiKey(`${aiModel?.platform_id}/${aiModel?.model_id}`, this.app, this.settings as ImgOptimizerPluginSettings);
-		return {
-			aiModel: aiModel,
-			aiModel_APIKey: aiModel_APIKey
-		};
-	}
-
-    async convertImageToMarkdown(blob: Blob): Promise<string | null> {
-		const { aiModel, aiModel_APIKey } = await this.obtainAIModelInfo();
-		let resultText = '';
-
-		try {
-			if(aiModel === undefined) throw "AI Model not found.";
-			if (aiModel_APIKey.length === 0) throw "AI Model API Key not found.";
-
-			// success!
-			const msg = `Interacting with ${aiModel.model_id}`;
-			console.log(msg);
-			new Notice(msg);
-
-			const modelInstance = createModelInstance(aiModel!, aiModel_APIKey, this.app);
-			modelInstance.init();
-			await modelInstance.addImage(blob);
-			resultText = await modelInstance.taskOCR();
-		} catch (error) {
-			console.log(error);
-			resultText = `Error in calling AI Model: ${aiModel?.model_id || 'Unknown'}.\n${error}`;
-		}
-
-		return resultText;
-    }
-
-
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	async insertContent(editor: Editor, _filePath: any = undefined, _textContent: any = undefined, _cursor: "from" | "to" | "head" | "anchor" | null = null): Promise<void> {
-		// Parse both inputs at once to avoid multiple schema validations
-		const [filePath, textContent] = await Promise.all([
-			stringOrEmptySchema.parse(_filePath),
-			stringOrEmptySchema.parse(_textContent)
-		]);
-	
-		let content = '';
-		
-		if (filePath.length > 0) {
-			if(tUtils.isValidHttpUrl(filePath)) { // http/https file path
-				content += `\n![](${filePath})\n`;
-			} else { // a local file path
-				content += `\n![[${filePath}]]\n`;
-			}
-	
-			new Notice(`Image saved as ${filePath}`);
-		}
-	
-		if (textContent.length > 0) {
-			content += `\n${textContent}\n`;
-		}
-	
-		// Single editor operation instead of multiple
-		if (content) {
-			if(_cursor === null) {
-				editor.replaceSelection(content);
-			} else {
-				editor.replaceRange(content, editor.getCursor(_cursor));
-			}
-			
-		}
-	}
 
 	/**
-	 * Handles the conversion of images from the clipboard to markdown using AI models.
-	 * 
-	 * This method reads images from the clipboard, processes each image using the specified AI model,
-	 * and presents the result in a modal. If the conversion is successful, the image and/or the resulting
-	 * text can be embedded into the current markdown editor.
-	 * 
-	 * The method checks if any image conversion is already in progress, and notifies the user if the
-	 * clipboard is empty or if an AI model interaction fails.
-	 * 
-	 * @param editor - The markdown editor where the image and text will be embedded.
-	 * @param _view - The markdown view associated with the editor.
+	 * Handles the OCR clipboard action.
+	 * Checks if the clipboard has any PNG images, and if so,
+	 * processes them using the OCR endpoint to extract text.
+	 * Shows a modal to confirm the extracted text and allow the user to
+	 * include the image in the markdown if desired.
 	 */
-     
-	// TODO: fix
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async handleOCR(editor: Editor, _view: MarkdownView) {
+    async handleOCR(editor: Editor) {
 		const clipboardItems = await navigator.clipboard.read();
 
 		if(this.locked) {
@@ -273,46 +194,40 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			return;
 		}
 
+		const context = { settings: { apiServer: this.settings?.apiServer || '' } };
 		const promises = clipboardItems
 			.filter(item => item.types.includes("image/png"))
 			.map(async (item) => {
 				const blob = await item.getType("image/png");
-				const resultText = await this.convertImageToMarkdown(blob);
+				const resultText = await convertImageToMarkdown(blob, context);
 
 				const modal = new ImageTextModal(this.app, {
-					imageSrc: blob, 
-					resultText: (resultText === null) ? `Error in interacting with AI model: ${this.settings?.aiModel}` : resultText,
+					imageSrc: blob,
+					resultText: resultText,
 				});
-				
+
 				const result = await modal.openWithPromise();
 
-				if (result) { // Simplified null check
-					const filePath = result.includeImage ? await this.convertWrapper(blob) : null; // Combined conditional assignment
-					await this.insertContent(editor, filePath, result.textContent);
+				if (result) {
+					const filePath = result.includeImage ? await this.convertWrapper(blob) : null;
+					await insertContent(editor, filePath, result.textContent);
 				}
 			});
 
 		this.locked = true;
+		const modal = new LoadingModal(this.app);
+		modal.status = 'OCR-ing...';
+    	modal.open();
+
 		await Promise.all(promises);
 		this.locked = false;
+		modal.close();
     }
 
 	/**
-	 * Summarizes the currently selected text in the markdown editor using an AI model.
-	 * 
-	 * This method checks for the following preconditions:
-	 * 1. The selected text is not empty.
-	 * 2. No other image conversion is in progress.
-	 * 3. The AI model is valid.
-	 * 4. The AI model API key is not empty.
-	 * 
-	 * If all preconditions are met, the method will interact with the AI model, and
-	 * insert the result text below the original selection.
-	 * 
-	 * @param editor - The markdown editor where the text will be inserted.
+	 * Summarizes the currently selected text using the text generator API.
 	 */
 	async handleSummarize(editor: Editor) {
-		const { aiModel, aiModel_APIKey } = await this.obtainAIModelInfo();
 		const selectedText = editor.getSelection().trim();
 
 		if (selectedText.length == 0) {
@@ -321,45 +236,71 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		} else if (this.locked) {
 			new Notice(`Image Conversion in Progress: Please hold on for a moment`);
 			return;
-		} else if (aiModel === undefined) {
-			new Notice(`AI Model not found`);
-			return;
-		} else if (aiModel_APIKey.length == 0) {
-			new Notice(`AI Model API Key not found`);
-			return;
 		} else {
-			const msg = `Interacting with ${aiModel.model_id}`;
+			const msg = `Summarizing text...`;
 			console.log(msg);
 			new Notice(msg);
 		}
 
 		this.locked = true;
-		let resultText = '';
+    	const modal = new LoadingModal(this.app);
+		modal.status = 'Summarizing text...';
+    	modal.open();
+
 		try {
-			const modelInstance = createModelInstance(aiModel, aiModel_APIKey, this.app);
-			modelInstance.init();
-			resultText = await modelInstance.taskSummarize(selectedText);
+			const endpointUrl = `${this.settings?.apiServer}/text/generator`;
+
+			const requestBody = {
+				prompt: "Summarize the provided Markdown text into concise, key bullet points. Focus on capturing the main ideas, key steps, or critical information. Aim for brevity, while retaining the essential meaning.",
+				providedText: selectedText,
+				system: "You are a helpful research assistant that provides clear, concise summaries of text content."
+			};
+
+			const response = await axios.post(endpointUrl, requestBody, {
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				responseType: 'json',
+			});
+
+			const responseData = response.data as {
+				success: boolean;
+				errors?: string;
+				messages?: string;
+				result?: { text: string };
+			};
+
+			let resultText = '';
+			if (responseData.success === true && responseData.result?.text) {
+				resultText = responseData.result.text;
+			} else if (responseData.errors) {
+				resultText = `Text generation error: ${responseData.errors}`;
+			} else {
+				resultText = 'Text generation error: Unknown error occurred';
+			}
+
+			// Insert the returned text below the original selection
+			await insertContent(editor, null, resultText, "to");
+
 		} catch (error) {
-			resultText = `Error in calling AI Model: ${aiModel.model_id}.\n${error}`;
+			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+			console.error('Error in text generation:', error);
+			const errorText = `Error generating summary: ${errorMessage}`;
+			await insertContent(editor, null, errorText, "to");
 		}
 
-		// Insert the returned text below the original selection
-		await this.insertContent(editor, null, resultText, "to");
 		this.locked = false;
+		modal.close();
 	}
 
 	/**
-	 * Handles the conversion and embedding of images from the clipboard into the markdown editor.
-	 * 
-	 * This method reads image data from the clipboard, converts each image to the preferred format
-	 * using the `convertWrapper` function, and embeds the resulting image file into the current
-	 * markdown editor session. It displays notifications based on the conversion process.
-	 * 
-	 * If the image conversion is already in progress, or if the clipboard is empty, it notifies the user
-	 * and exits early.
-	 * 
-	 * @param editor - The markdown editor where the image will be embedded.
-	 * @param _view - The markdown view associated with the editor.
+	 * Handles the Clipboard Image action.
+	 * Checks if the clipboard has any PNG images, and if so,
+	 * processes them using the image conversion endpoint to convert them to markdown.
+	 * Shows a modal to indicate progress.
+	 * @param {Editor} editor - The active editor.
+	 * @param {MarkdownView} _view - The active markdown view.
+	 * @param {boolean} forceS3Upload - Optional. If true, forces the image to be uploaded to S3 instead of local storage.
 	 */
     async handleClipboardImage(editor: Editor, _view: MarkdownView, forceS3Upload: boolean = false) {
 		const clipboardItems = (await navigator.clipboard.read()).filter(item => item.types.includes("image/png"));
@@ -376,16 +317,27 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			.map(async (item) => {
 				const blob = await item.getType("image/png");
 				const filePath = await this.convertWrapper(blob, forceS3Upload);
-				await this.insertContent(editor, filePath);
+				await insertContent(editor, filePath);
 			});
 
 		this.locked = true;
-		await Promise.all(promises);
-		this.locked = false;
-    }
+    	const modal = new LoadingModal(this.app);
+		modal.status = 'Transforming...';
+    	modal.open();
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async handleChangeCase(editor: Editor, _view: MarkdownView) {
+		await Promise.all(promises);
+		
+		this.locked = false;
+		modal.close();
+    }
+	
+	/**
+	 * Handles the Change Case action.
+	 * Shows a modal to allow the user to select the desired case conversion.
+	 * Replaces the selected text with the converted text if the modal is closed with a result.
+	 * @param {Editor} editor - The active editor.
+	 */
+    async handleChangeCase(editor: Editor) {
 		const selectedText = editor.getSelection();
 
 		if (selectedText.trim().length == 0) {
@@ -403,6 +355,13 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		}
     }
 
+	/**
+	 * Handles the Wrap Callout action.
+	 * Replaces the selected text with a callout block if the selected text is not already a callout.
+	 * Shows a notice if no text is selected or if the selected text is already a callout.
+	 * @param {Editor} editor - The active editor.
+	 * @param {MarkdownView} _view - The active Markdown view.
+	 */
     async handleWrapCallout(editor: Editor, _view: MarkdownView) {
 		  // Get the active Markdown view
 		  if (!_view) {
