@@ -1,4 +1,4 @@
-import { Editor, MarkdownView, Notice, Plugin } from 'obsidian';
+import { Editor, MarkdownFileInfo, MarkdownView, Notice, Plugin } from 'obsidian';
 import axios from 'axios';
 import { tUtils } from './utils';
 import { DEFAULT_SETTINGS, ImgOptimizerPluginSettingsTab } from './settings';
@@ -6,7 +6,7 @@ import { ImgOptimizerPluginSettings } from './interfaces';
 import { ImageTextModal } from './aiprompt_modal';
 import { ChangeCaseModal } from './changecase_modal';
 import { LoadingModal } from './loadingmodal';
-import { convertImageToMarkdown, insertContent } from './ocr-utils';
+import { convertImageToMarkdown, extractTextFromImage, insertContent } from './ocr-utils';
 import path from 'path';
 
 export default class ImgWebpOptimizerPlugin extends Plugin {
@@ -25,6 +25,51 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		this.app.workspace.onLayoutReady(async () => {
 			await this.loadSettings();
 			this.addSettingTab(new ImgOptimizerPluginSettingsTab(this.app, this));
+
+			// This adds an editor command that can perform some operation on the current editor instance
+			this.addCommand({
+				id: 'paste-optimized-img',
+				name: 'Embed clipboard image in WEBP/AVIF/PNG/JPEG format',
+				editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
+					if (view instanceof MarkdownView) {
+						// Handle the case where ctx is a MarkdownFileInfo
+						await this.handleClipboardImage(editor, view);
+					}
+				}
+			});
+
+			this.addCommand({
+				id: 's3-optimized-img',
+				name: 'Optimize and save to S3 Storage',
+				editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
+					if (view instanceof MarkdownView) {
+						// Handle the case where ctx is a MarkdownFileInfo
+						await this.handleClipboardImage(editor, view, true);
+					}
+				}
+			});
+
+			this.addCommand({
+				id: 'ai-convert-md',
+				name: 'Convert clipboard image to Markdown/Latex',
+				editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
+					if (view instanceof MarkdownView) {
+						// Handle the case where ctx is a MarkdownFileInfo
+						await this.handleOCR(editor);
+					}
+				}
+			});
+
+			this.addCommand({
+				id: 'extract-text-image',
+				name: 'Extract text from Image',
+				editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
+					if (view instanceof MarkdownView) {
+						// Handle the case where ctx is a MarkdownFileInfo
+						await this.handleOCR(editor, true);
+					}
+				}
+			});
 
 			// editor-menu
 			this.registerEvent(
@@ -53,6 +98,11 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 						menu.addItem((item) => {
 							item.setTitle(`Clipboard: Image 2 Markdown`).setIcon('brain-circuit')
 								.onClick(async () => await this.handleOCR(editor));
+						});
+
+						menu.addItem((item) => {
+							item.setTitle(`Clipboard: Image 2 Text`).setIcon('brain-circuit')
+								.onClick(async () => await this.handleOCR(editor, true));
 						});
 
 						menu.addItem((item) => {
@@ -183,7 +233,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	 * Shows a modal to confirm the extracted text and allow the user to
 	 * include the image in the markdown if desired.
 	 */
-    async handleOCR(editor: Editor) {
+    async handleOCR(editor: Editor, extractText: boolean = false) {
 		const clipboardItems = await navigator.clipboard.read();
 
 		if(this.locked) {
@@ -199,7 +249,12 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			.filter(item => item.types.includes("image/png"))
 			.map(async (item) => {
 				const blob = await item.getType("image/png");
-				const resultText = await convertImageToMarkdown(blob, context);
+				let resultText = '';
+				if(extractText) {
+					resultText = await extractTextFromImage(blob, context);
+				} else {
+					resultText = await convertImageToMarkdown(blob, context);
+				}
 
 				const modal = new ImageTextModal(this.app, {
 					imageSrc: blob,
