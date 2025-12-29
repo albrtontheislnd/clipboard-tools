@@ -49,6 +49,14 @@ export default defineConfig({
           src: "static/data.json",
           dest: path.resolve(__dirname),
         },
+        {
+          src: "static/manifest.json",
+          dest: "",
+        },
+        {
+          src: "static/data.json",
+          dest: "",
+        },
       ],
     })
   ],
