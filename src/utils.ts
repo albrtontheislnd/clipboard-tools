@@ -134,4 +134,32 @@ export class tUtils {
 		}
 	}
 
+	/**
+	 * Checks if there is at least one image in the clipboard
+	 * @returns {Promise<boolean>} True if an image exists in clipboard, false otherwise
+	 */
+	static async hasImageInClipboard(): Promise<boolean> {
+		try {
+			// Check if the Clipboard API is available
+			if (!navigator.clipboard || !navigator.clipboard.read) {
+				console.log('Clipboard API not available in this browser');
+				return false;
+			}
+
+			// Read clipboard contents
+			const clipboardItems = await navigator.clipboard.read();
+
+			// Use some to check if any of the types are image types
+			return clipboardItems.some(item => item.types.some(type => type.startsWith('image/')));
+		} catch (error: unknown) {
+			// Handle permission denied or other errors
+			if (error instanceof Error && error.name === 'NotAllowedError') {
+				console.log('Clipboard access denied. User must grant permission.');
+			} else {
+				console.log('Error checking clipboard:', error);
+			}
+			return false;
+		}
+	}
+
 }

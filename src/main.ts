@@ -8,6 +8,7 @@ import { ChangeCaseModal } from './changecase_modal';
 import { LoadingModal } from './loadingmodal';
 import { convertImageToMarkdown, extractTextFromImage, insertContent } from './ocr-utils';
 import * as path from 'path';
+import { registerContextMenu } from './contextmenu';
 
 export default class ImgWebpOptimizerPlugin extends Plugin {
 	settings?: ImgOptimizerPluginSettings;
@@ -75,40 +76,34 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			this.registerEvent(
 				this.app.workspace.on('editor-menu', (menu, editor, view) => {
 					if (view instanceof MarkdownView) {
-						menu.addItem((item) => {
-							item.setTitle(`Clipboard: Change Case`).setIcon('case-sensitive')
-								.onClick(async () => await this.handleChangeCase(editor));
-						});
 
 						menu.addItem((item) => {
-							item.setTitle(`Clipboard: as Callout`).setIcon('wrap-text')
-								.onClick(async () => await this.handleWrapCallout(editor, view));
-						});
-
-						menu.addItem((item) => {
-							item.setTitle(`Clipboard: Embed as ${this.settings?.imageFormat.toUpperCase()}`).setIcon('image-plus')
+							item.setTitle(`Alapaki: Embed (${this.settings?.imageFormat.toUpperCase()})`).setIcon('image-plus')
 								.onClick(async () => await this.handleClipboardImage(editor, view));
 						});
 
 						menu.addItem((item) => {
-							item.setTitle(`Clipboard: Upload ${this.settings?.imageFormat.toUpperCase()} image to S3`).setIcon('image-plus')
+							item.setTitle(`Alapaki: Save to S3 (${this.settings?.imageFormat.toUpperCase()})`).setIcon('image-plus')
 								.onClick(async () => await this.handleClipboardImage(editor, view, this.settings?.useS3Storage));
 						});
 
 						menu.addItem((item) => {
-							item.setTitle(`Clipboard: Image 2 Markdown`).setIcon('brain-circuit')
+							item.setTitle(`Alapaki: Markdownify`).setIcon('brain-circuit')
 								.onClick(async () => await this.handleOCR(editor));
 						});
 
 						menu.addItem((item) => {
-							item.setTitle(`Clipboard: Image 2 Text`).setIcon('brain-circuit')
+							item.setTitle(`Alapaki: OCR`).setIcon('brain-circuit')
 								.onClick(async () => await this.handleOCR(editor, true));
 						});
 
 						menu.addItem((item) => {
-							item.setTitle(`Clipboard: Summarize`).setIcon('clipboard-pen-line')
+							item.setTitle(`Alapaki: Summarize`).setIcon('clipboard-pen-line')
 								.onClick(async () => await this.handleSummarize(editor));
 						});
+
+						// register submenu:
+						registerContextMenu(menu, editor, view, this.handleWrapCallout.bind(this), this.handleChangeCase.bind(this));
 					}
 				})
 			);
