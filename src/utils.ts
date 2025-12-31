@@ -80,4 +80,58 @@ export class tUtils {
 		}
 	}
 
+	/**
+	 * Converts an image blob to the specified format using native Web Browser API
+	 * @param blob - The source image blob
+	 * @param format - Target format (webp, jpeg, png)
+	 * @param quality - Compression quality (1-100)
+	 * @returns Promise resolving to converted Blob or null on error
+	 */
+	static async convertImageLocally(blob: Blob, format: string, quality: number): Promise<Blob | null> {
+		try {
+			// Create an image element to load the blob
+			const img = new Image();
+			const url = URL.createObjectURL(blob);
+			
+			await new Promise((resolve, reject) => {
+				img.onload = resolve;
+				img.onerror = reject;
+				img.src = url;
+			});
+
+			// Create canvas and draw the image
+			const canvas = document.createElement('canvas');
+			canvas.width = img.width;
+			canvas.height = img.height;
+			const ctx = canvas.getContext('2d');
+			
+			if (!ctx) {
+				URL.revokeObjectURL(url);
+				return null;
+			}
+
+			ctx.drawImage(img, 0, 0);
+
+			// Convert to target format
+			const mimeType = format === 'jpeg' ? 'image/jpeg' : `image/${format}`;
+			const qualityValue = Math.max(0.01, Math.min(1, quality / 100));
+
+			const convertedBlob = await new Promise<Blob | null>((resolve) => {
+				canvas.toBlob(
+					(blob) => resolve(blob),
+					mimeType,
+					qualityValue
+				);
+			});
+
+			// Clean up
+			URL.revokeObjectURL(url);
+
+			return convertedBlob;
+		} catch (error) {
+			console.error('Error in local image conversion:', error);
+			return null;
+		}
+	}
+
 }
