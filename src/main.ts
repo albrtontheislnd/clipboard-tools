@@ -9,6 +9,7 @@ import { LoadingModal } from './loadingmodal';
 import { convertImageToMarkdown, extractTextFromImage, insertContent } from './ocr-utils';
 import * as path from 'path';
 import { registerContextMenu } from './contextmenu';
+import { zhongwenTasks } from './zhongwen';
 
 export default class ImgWebpOptimizerPlugin extends Plugin {
 	settings?: ImgOptimizerPluginSettings;
@@ -103,7 +104,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 						});
 
 						// register submenu:
-						registerContextMenu(menu, editor, view, this.handleWrapCallout.bind(this), this.handleChangeCase.bind(this));
+						registerContextMenu(menu, editor, view, this.handleWrapCallout.bind(this), this.handleChangeCase.bind(this), this.handleZhongwen.bind(this));
 					}
 				})
 			);
@@ -370,6 +371,73 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 				prompt: "Summarize the provided Markdown text into concise, key bullet points. Focus on capturing the main ideas, key steps, or critical information. Aim for brevity, while retaining the essential meaning.",
 				providedText: selectedText,
 				system: "You are a helpful research assistant that provides clear, concise summaries of text content."
+			};
+
+			const response = await axios.post(endpointUrl, requestBody, {
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				responseType: 'json',
+			});
+
+			const responseData = response.data as {
+				success: boolean;
+				errors?: string;
+				messages?: string;
+				result?: { text: string };
+			};
+
+			let resultText = '';
+			if (responseData.success === true && responseData.result?.text) {
+				resultText = responseData.result.text;
+			} else if (responseData.errors) {
+				resultText = `Text generation error: ${responseData.errors}`;
+			} else {
+				resultText = 'Text generation error: Unknown error occurred';
+			}
+
+			// Insert the returned text below the original selection
+			await insertContent(editor, null, resultText, "to");
+
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+			console.error('Error in text generation:', error);
+			const errorText = `Error generating summary: ${errorMessage}`;
+			await insertContent(editor, null, errorText, "to");
+		}
+
+		this.locked = false;
+		modal.close();
+	}
+
+	async handleZhongwen(editor: Editor , tasks: 'grammar' | 'word-usage-en' | 'word-usage-vi' | 'explain') {
+		const selectedText = editor.getSelection().trim();
+
+		if (selectedText.length == 0) {
+			new Notice("No text selected");
+			return;
+		} else if (this.locked) {
+			new Notice(`Image Conversion in Progress: Please hold on for a moment`);
+			return;
+		} else {
+			const msg = `Analyzing text...`;
+			console.log(msg);
+			new Notice(msg);
+		}
+
+		this.locked = true;
+    	const modal = new LoadingModal(this.app);
+		modal.status = 'Analyzing text...';
+    	modal.open();
+
+		try {
+			const endpointUrl = `${this.settings?.apiServer}/text/zhongwen`;
+			const { prompt: zh_prompt, system: zh_system } = zhongwenTasks(tasks, selectedText);
+
+			const requestBody = {
+				prompt: zh_prompt,
+				providedText: '',
+				system: zh_system
 			};
 
 			const response = await axios.post(endpointUrl, requestBody, {

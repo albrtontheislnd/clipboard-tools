@@ -1,6 +1,13 @@
 import { Menu, MenuItem, Editor, MarkdownView } from "obsidian";
 
-export function registerContextMenu(menu: Menu, editor: Editor, view: MarkdownView, handleWrapCallout: (editor: Editor, view: MarkdownView) => Promise<void>, handleChangeCase: (editor: Editor) => Promise<void>) {
+export function registerContextMenu(
+    menu: Menu, 
+    editor: Editor, 
+    view: MarkdownView, 
+    handleWrapCallout: (editor: Editor, view: MarkdownView) => Promise<void>, 
+    handleChangeCase: (editor: Editor) => Promise<void>,
+    handleZhongwen: (editor: Editor, tasks: 'grammar' | 'word-usage-en' | 'word-usage-vi' | 'explain') => Promise<void>
+) {
     // Add a main menu item with submenu
     let subMenu: Menu;
     menu.addItem((item: MenuItem) => {
@@ -27,18 +34,36 @@ export function registerContextMenu(menu: Menu, editor: Editor, view: MarkdownVi
 
         subMenu.addSeparator();
 
-        // Add the main selection command
+        // Add Zhongwen grammar command
         subMenu.addItem((subItem: MenuItem) => {
-            subItem.setTitle("TBD").onClick(() => {
-                // empty for later
-            });
+            subItem.setTitle("Zhongwen: Grammar").setIcon('book')
+                .onClick(async () => {
+                    await handleZhongwen(editor, 'grammar');
+                });
         });
 
-        // Add the main selection command
+        // Add Zhongwen word usage (English) command
         subMenu.addItem((subItem: MenuItem) => {
-            subItem.setTitle("TBD 2").onClick(() => {
-                // empty for later
-            });
+            subItem.setTitle("Zhongwen: Word Usage (EN)").setIcon('book-open')
+                .onClick(async () => {
+                    await handleZhongwen(editor, 'word-usage-en');
+                });
+        });
+
+        // Add Zhongwen word usage (Vietnamese) command
+        subMenu.addItem((subItem: MenuItem) => {
+            subItem.setTitle("Zhongwen: Word Usage (VI)").setIcon('book-open')
+                .onClick(async () => {
+                    await handleZhongwen(editor, 'word-usage-vi');
+                });
+        });
+
+        // Add Zhongwen explain command
+        subMenu.addItem((subItem: MenuItem) => {
+            subItem.setTitle("Zhongwen: Explain").setIcon('info')
+                .onClick(async () => {
+                    await handleZhongwen(editor, 'explain');
+                });
         });
     });
 }
