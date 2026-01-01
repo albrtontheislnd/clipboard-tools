@@ -1,7 +1,7 @@
 import { App, Modal } from 'obsidian';
 import { createApp } from 'vue';
 import { App as vueApp } from 'vue';
-import  ChangeCase  from './components/ChangeCase.vue';
+import  ChangeCase  from '../components/ChangeCase.vue';
 
 export type callbackValue = { textContent: string } | null;
 export type ChangeCaseInputArgs = {
@@ -29,7 +29,9 @@ export class ChangeCaseModal extends Modal {
 			this.onClose = () => {
 				resolve(this.returnValue);
 				this.vueApp?.unmount();
+				this.vueApp = null;
 				this.contentEl.empty();
+				
 			};
 		});
 		this.openModal();

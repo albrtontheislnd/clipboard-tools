@@ -1,6 +1,6 @@
 <script lang="ts" setup>
-import type { ImageTextModalInputArgs, callbackValue } from '@/aiprompt_modal';
-import { PropType, ref } from 'vue';
+import type { ImageTextModalInputArgs, callbackValue } from '@/modals/aiprompt_modal';
+import { PropType, ref, onUnmounted } from 'vue';
 
 const props = defineProps({
   close: { type: Function, required: true },
@@ -30,6 +30,10 @@ const handleInsert = () => {
 
   props.insertData(v);
 };
+
+onUnmounted(() => {
+  if (imageUrl.value) URL.revokeObjectURL(imageUrl.value);
+});
 </script>
 
 <template>

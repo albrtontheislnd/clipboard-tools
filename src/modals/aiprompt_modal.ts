@@ -1,7 +1,7 @@
 import { App, Modal } from 'obsidian';
 import { createApp } from 'vue';
 import { App as vueApp } from 'vue';
-import  ImageToMarkdown  from './components/ImageToMarkdown.vue';
+import  ImageToMarkdown  from '../components/ImageToMarkdown.vue';
 
 export type callbackValue = { includeImage: boolean, textContent: string } | null;
 export type ImageTextModalInputArgs = {
@@ -13,6 +13,8 @@ export class ImageTextModal extends Modal {
 	private vueApp: vueApp<Element> | null = null;
 	private returnValue: callbackValue  = null;
 	private inputValue: ImageTextModalInputArgs;
+
+	private boundClose = this.close.bind(this);
 	
 	/**
 	 * Constructor for the ImageTextModal class.
@@ -21,10 +23,7 @@ export class ImageTextModal extends Modal {
 	 */
 	constructor(app: App, args: ImageTextModalInputArgs) {
 		super(app);
-		this.inputValue = {
-			'imageSrc': args.imageSrc,
-			'resultText': args.resultText,
-		};
+		this.inputValue = args;
 	}
 
 	/**
@@ -40,6 +39,7 @@ export class ImageTextModal extends Modal {
 				this.vueApp?.unmount();
 				this.contentEl.empty();
 			};
+
 		});
 		this.openModal();
 		return p;
@@ -53,14 +53,17 @@ export class ImageTextModal extends Modal {
 	private openModal() {
 		if (!this.vueApp) {
 			this.vueApp = createApp(ImageToMarkdown, {
-				close: this.close.bind(this),
+				close: this.boundClose,
 				insertData: (data: callbackValue) => {
 					this.returnValue = data;
 					this.close();
 				},
 				values: this.inputValue,
 			});
-			this.vueApp.mount(this.containerEl.children[1]);
+			
+			const container = this.containerEl.children[1];
+			if (!container) throw new Error('Container not found');
+			this.vueApp.mount(container);
 		}
 
 		this.open();

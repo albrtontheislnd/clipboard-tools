@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { ChangeCaseInputArgs, callbackValue } from '@/changecase_modal';
+import type { ChangeCaseInputArgs, callbackValue } from '@/modals/changecase_modal';
 import { PropType, ref } from 'vue';
 
 const props = defineProps({
