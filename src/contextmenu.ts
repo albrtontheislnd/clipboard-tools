@@ -1,4 +1,5 @@
 import { Menu, MenuItem, Editor, MarkdownView } from "obsidian";
+import { insertPromptCallout } from "./libs/prompt-parser";
 
 export function registerContextMenu(
     menu: Menu, 
@@ -6,7 +7,8 @@ export function registerContextMenu(
     view: MarkdownView, 
     handleWrapCallout: (editor: Editor, view: MarkdownView) => Promise<void>, 
     handleChangeCase: (editor: Editor) => Promise<void>,
-    handleZhongwen: (editor: Editor, tasks: 'grammar' | 'word-usage-en' | 'word-usage-vi' | 'explain') => Promise<void>
+    handleZhongwen: (editor: Editor, tasks: 'grammar' | 'word-usage-en' | 'word-usage-vi' | 'explain') => Promise<void>,
+    handlePromptCallouts: () => Promise<void>
 ) {
     // Add a main menu item with submenu
     let subMenu: Menu;
@@ -29,6 +31,24 @@ export function registerContextMenu(
             subItem.setTitle("Wrap as Callout").setIcon('wrap-text')
                 .onClick(async () => {
                     await handleWrapCallout(editor, view);
+                });
+        });
+
+        subMenu.addSeparator();
+
+        // LLM: Insert Prompt Callout
+        subMenu.addItem((subItem: MenuItem) => {
+            subItem.setTitle("LLM: New Prompt").setIcon('wrap-text')
+                .onClick(async () => {
+                    insertPromptCallout(editor);
+                });
+        });
+
+        // LLM: Answer Prompts
+        subMenu.addItem((subItem: MenuItem) => {
+            subItem.setTitle("LLM: Answer Prompts").setIcon('sparkles')
+                .onClick(async () => {
+                    await handlePromptCallouts();
                 });
         });
 

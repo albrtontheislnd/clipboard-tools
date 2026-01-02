@@ -10,6 +10,7 @@ import { convertImageToMarkdown, extractTextFromImage, insertContent } from './o
 import * as path from 'path';
 import { registerContextMenu } from './contextmenu';
 import { zhongwenTasks } from './zhongwen';
+import { appendToPromptCallout, getPromptCallouts, replacePromptCallout } from './libs/prompt-parser';
 
 export default class ImgWebpOptimizerPlugin extends Plugin {
 	settings?: ImgOptimizerPluginSettings;
@@ -104,7 +105,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 						});
 
 						// register submenu:
-						registerContextMenu(menu, editor, view, this.handleWrapCallout.bind(this), this.handleChangeCase.bind(this), this.handleZhongwen.bind(this));
+						registerContextMenu(menu, editor, view, this.handleWrapCallout.bind(this), this.handleChangeCase.bind(this), this.handleZhongwen.bind(this), this.handlePromptCallouts.bind(this));
 					}
 				})
 			);
@@ -574,5 +575,75 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		
 		  // Replace the selected text with the callout block
 		  editor.replaceSelection(calloutContent);
+    }
+
+    async handlePromptCallouts() {
+		if(this.locked) {
+			new Notice(`Image Conversion in Progress: Please hold on for a moment`);
+			return;
+		}
+
+		// Get all the prompts
+		const prompts = getPromptCallouts(this.app);
+
+		// loop through prompts' members
+		for (const [uuid, prompt] of Object.entries(prompts)) {
+
+			// lock
+			this.locked = true;
+			const modal = new LoadingModal(this.app);
+			modal.status = 'Reasoning...';
+			modal.open();
+
+			// start the job
+			const endpointUrl = `${this.settings?.apiServer}/text/generator`;
+			const requestBody = {
+				prompt: prompt,
+				providedText: '',
+				system: `You are a helpful research assistant.
+Output your answer in Markdown format.
+For section headers, include the header text as plain text **without using Markdown heading syntax** (do not use \`#\`, \`##\`, etc.).
+**Do not use horizontal rules** (\`---\`, \`***\`, or similar).
+Visually separate sections using spacing and/or bold text only.`
+			};
+
+			try {
+				const response = await axios.post(endpointUrl, requestBody, {
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					responseType: 'json',
+				});
+
+				const responseData = response.data as {
+					success: boolean;
+					errors?: string;
+					messages?: string;
+					result?: { text: string };
+				};
+
+				let resultText = '';
+				if (responseData.success === true && responseData.result?.text) {
+					resultText = responseData.result.text;
+					replacePromptCallout(this.app, uuid, resultText);
+				} else if (responseData.errors) {
+					resultText = `❌ Text generation error: ${responseData.errors}`;
+					appendToPromptCallout(this.app, uuid, resultText);
+				} else {
+					resultText = '❌ Text generation error: Unknown error occurred';
+					appendToPromptCallout(this.app, uuid, resultText);
+				}
+
+			} catch (error) {
+				const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+				console.log('Error in text generation:', error);
+				const errorText = `❌ Error generating response: ${errorMessage}`;
+				appendToPromptCallout(this.app, uuid, errorText);
+			}
+
+			// release the lock
+			this.locked = false;
+			modal.close();
+		}		
     }
 }
