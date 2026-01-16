@@ -20,6 +20,7 @@
   "dependencies": {
     "axios": "^1.13.2",
     "builtin-modules": "^5.0.0",
+    "katex": "^0.16.27",
     "obsidian": "^1.8.7",
     "openai": "^5.23.2",
     "pinia": "^3.0.4",

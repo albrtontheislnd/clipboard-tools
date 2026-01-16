@@ -11,6 +11,7 @@ import * as path from 'path';
 import { registerContextMenu } from './contextmenu';
 import { zhongwenTasks } from './zhongwen';
 import { appendToPromptCallout, getPromptCallouts, replacePromptCallout } from './libs/prompt-parser';
+import { LatexInputModal } from './modals/latex_modal';
 
 export default class ImgWebpOptimizerPlugin extends Plugin {
 	settings?: ImgOptimizerPluginSettings;
@@ -102,6 +103,11 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 						menu.addItem((item) => {
 							item.setTitle(`Alapaki: Summarize`).setIcon('clipboard-pen-line')
 								.onClick(async () => await this.handleSummarize(editor));
+						});
+
+						menu.addItem((item) => {
+							item.setTitle(`Alapaki: Latex Editor`).setIcon('clipboard-pen-line')
+								.onClick(async () => await this.handleLatexInput(editor));
 						});
 
 						// register submenu:
@@ -531,6 +537,19 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		}
 
 		const modal = new ChangeCaseModal(this.app, {
+			selectedText: selectedText, 
+		});
+
+		const result = await modal.openWithPromise();
+		if (result) { // Simplified null check
+			editor.replaceSelection(result.textContent);
+		}
+    }
+
+    async handleLatexInput(editor: Editor) {
+		const selectedText = editor.getSelection();
+
+		const modal = new LatexInputModal(this.app, {
 			selectedText: selectedText, 
 		});
 
