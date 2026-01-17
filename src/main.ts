@@ -12,6 +12,7 @@ import { registerContextMenu } from './contextmenu';
 import { zhongwenTasks } from './zhongwen';
 import { appendToPromptCallout, getPromptCallouts, replacePromptCallout } from './libs/prompt-parser';
 import { LatexSuggest } from './autosuggestions';
+import { InsertLatexModal } from './modals/latex_modal';
 
 export default class ImgWebpOptimizerPlugin extends Plugin {
 	settings?: ImgOptimizerPluginSettings;
@@ -105,6 +106,11 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 						menu.addItem((item) => {
 							item.setTitle(`Alapaki: Summarize`).setIcon('clipboard-pen-line')
 								.onClick(async () => await this.handleSummarize(editor));
+						});
+
+						menu.addItem((item) => {
+							item.setTitle(`Alapaki: Latex Symbols`).setIcon('clipboard-pen-line')
+								.onClick(async () => await this.handleLatexModal(editor));
 						});
 
 						// register submenu:
@@ -544,6 +550,26 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		const result = await modal.openWithPromise();
 		if (result) { // Simplified null check
 			editor.replaceSelection(result.textContent);
+		}
+    }
+
+    async handleLatexModal(editor: Editor) {
+		const modal = new InsertLatexModal(this.app, {
+			selectedText: '', 
+		});
+
+		const result = await modal.openWithPromise();
+		if (result) { // Simplified null check
+			const cursor = editor.getCursor();
+  			
+			// Insert text at cursor (doesn't replace anything)
+  			editor.replaceRange(result.textContent, cursor);
+  
+			// Optional: move cursor to end of inserted text
+			editor.setCursor({
+				line: cursor.line,
+				ch: cursor.ch + result.textContent.length
+			});
 		}
     }
 

@@ -16,6 +16,8 @@ export class LatexSuggest extends EditorSuggest<latexSuggestion> {
     plugin: ImgWebpOptimizerPlugin;
     vueApps: Map<HTMLElement, VueApp> = new Map();
     allLatexSymbols: Record<string, { symbol: string; category: string }>;
+    suggestionMap: Map<string, latexSuggestion[]> = new Map();
+
 
     constructor(app: App, plugin: ImgWebpOptimizerPlugin) {
         super(app);
@@ -92,20 +94,25 @@ export class LatexSuggest extends EditorSuggest<latexSuggestion> {
     }
 
 
+
     getSuggestions(context: EditorSuggestContext): latexSuggestion[] {
         const query = context.query.toLowerCase();
-        const suggestions: latexSuggestion[] = [];
-        
-        for (const [command, data] of Object.entries(this.allLatexSymbols)) {
-            if (command.toLowerCase().startsWith(query)) {
-                suggestions.push({ 
-                    command, 
-                    symbol: data.symbol,
-                    category: data.category
-                });
+        const suggestions = this.suggestionMap.get(query) || [];
+
+        if (suggestions.length === 0) {
+            for (const [command, data] of Object.entries(this.allLatexSymbols)) {
+                if (command.toLowerCase().startsWith(query)) {
+                    suggestions.push({ 
+                        command, 
+                        symbol: data.symbol,
+                        category: data.category
+                    });
+                }
             }
+
+            this.suggestionMap.set(query, suggestions);
         }
-        
+
         return suggestions.sort((a, b) => a.command.length - b.command.length);
     }
 

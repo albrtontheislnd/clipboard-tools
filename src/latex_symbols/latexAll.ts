@@ -18,3 +18,14 @@ export const latexCategories: Record<string, latexSymbol[]> = {
     'arrow': arrowSymbols,
     'delimiters': accentsDelimitersSymbols,
 };
+
+export const latexSidebarCategoryIcons: Record<string, string> = {
+    'relations': '<⊂',
+    'negation': '≢⊈',
+    'misc2': '⊞⊗',
+    'misc1': '∀∞',
+    'accents': 'âÄ',
+    'greek': 'αβ',
+    'arrow': '←⇑',
+    'delimiters': '⨂∑',
+};

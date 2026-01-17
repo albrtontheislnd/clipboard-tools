@@ -114,11 +114,8 @@ export const relationsSymbols: latexSymbol[] = [
         { display: '≢', latex: '\\eqcirc', tooltip: '\\eqcirc' },
         { display: '◁', latex: '\\trianglelefteq', tooltip: '\\trianglelefteq' },
         { display: '▷', latex: '\\trianglerighteq', tooltip: '\\trianglerighteq' },
-        { display: '∦', latex: '\\nshortparallel', tooltip: '\\nshortparallel' },
         { display: '≠', latex: '\\neq', tooltip: '\\neq' },
         { display: '▽', latex: '\\vartriangleleft', tooltip: '\\vartriangleleft' },
         { display: '△', latex: '\\vartriangleright', tooltip: '\\vartriangleright' },
 
 ];
-
-
