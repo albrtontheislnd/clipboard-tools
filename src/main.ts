@@ -11,11 +11,13 @@ import * as path from 'path';
 import { registerContextMenu } from './contextmenu';
 import { zhongwenTasks } from './zhongwen';
 import { appendToPromptCallout, getPromptCallouts, replacePromptCallout } from './libs/prompt-parser';
-import { LatexInputModal } from './modals/latex_modal';
+import { LatexSuggest } from './autosuggestions';
 
 export default class ImgWebpOptimizerPlugin extends Plugin {
 	settings?: ImgOptimizerPluginSettings;
 	locked: boolean = false;
+	latexSuggest!: LatexSuggest;
+	
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
@@ -105,17 +107,16 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 								.onClick(async () => await this.handleSummarize(editor));
 						});
 
-						menu.addItem((item) => {
-							item.setTitle(`Alapaki: Latex Editor`).setIcon('clipboard-pen-line')
-								.onClick(async () => await this.handleLatexInput(editor));
-						});
-
 						// register submenu:
 						registerContextMenu(menu, editor, view, this.handleWrapCallout.bind(this), this.handleChangeCase.bind(this), this.handleZhongwen.bind(this), this.handlePromptCallouts.bind(this));
 					}
 				})
 			);
 		});
+
+        // Register the suggestion provider
+        this.latexSuggest = new LatexSuggest(this.app, this);
+        this.registerEditorSuggest(this.latexSuggest);
 	}
 
 	/**
@@ -537,19 +538,6 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		}
 
 		const modal = new ChangeCaseModal(this.app, {
-			selectedText: selectedText, 
-		});
-
-		const result = await modal.openWithPromise();
-		if (result) { // Simplified null check
-			editor.replaceSelection(result.textContent);
-		}
-    }
-
-    async handleLatexInput(editor: Editor) {
-		const selectedText = editor.getSelection();
-
-		const modal = new LatexInputModal(this.app, {
 			selectedText: selectedText, 
 		});
 

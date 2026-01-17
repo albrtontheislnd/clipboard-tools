@@ -1,12 +1,8 @@
-import { SymbolTab } from "./interfaces";
+import { latexSymbol } from "./interfaces";
 
 
-export const greekHebrewSymbols: SymbolTab[] = [
-  {
-    id: 'greek-hebrew-1',
-    label: 'αβγ',
-    symbols: [
-      [
+export const greekHebrewSymbols: latexSymbol[] = [
+
         { display: 'α', latex: '\\alpha', tooltip: '\\alpha' },
         { display: 'κ', latex: '\\kappa', tooltip: '\\kappa' },
         { display: 'ψ', latex: '\\psi', tooltip: '\\psi' },
@@ -17,8 +13,7 @@ export const greekHebrewSymbols: SymbolTab[] = [
         { display: 'ϖ', latex: '\\varphi', tooltip: '\\varphi' },
         { display: 'Ω', latex: '\\Omega', tooltip: '\\Omega' },
         { display: 'ℷ', latex: '\\gimel', tooltip: '\\gimel' },
-      ],
-      [
+
         { display: 'β', latex: '\\beta', tooltip: '\\beta' },
         { display: 'λ', latex: '\\lambda', tooltip: '\\lambda' },
         { display: 'ρ', latex: '\\rho', tooltip: '\\rho' },
@@ -29,8 +24,7 @@ export const greekHebrewSymbols: SymbolTab[] = [
         { display: 'δ', latex: '\\delta', tooltip: '\\delta' },
         { display: 'ν', latex: '\\nu', tooltip: '\\nu' },
         { display: 'τ', latex: '\\tau', tooltip: '\\tau' },
-      ],
-      [
+
         { display: 'χ', latex: '\\chi', tooltip: '\\chi' },
         { display: 'μ', latex: '\\mu', tooltip: '\\mu' },
         { display: 'σ', latex: '\\sigma', tooltip: '\\sigma' },
@@ -38,10 +32,8 @@ export const greekHebrewSymbols: SymbolTab[] = [
         { display: 'Λ', latex: '\\Lambda', tooltip: '\\Lambda' },
         { display: 'Ξ', latex: '\\Xi', tooltip: '\\Xi' },
         { display: 'ℸ', latex: '\\daleth', tooltip: '\\daleth' },
-      ],
-      [
+
         { display: 'ϵ', latex: '\\epsilon', tooltip: '\\epsilon' },
-        { display: 'o', latex: 'o', tooltip: 'o' },
         { display: 'θ', latex: '\\theta', tooltip: '\\theta' },
         { display: 'ϖ', latex: '\\varpi', tooltip: '\\varpi' },
         { display: 'Φ', latex: '\\Phi', tooltip: '\\Phi' },
@@ -50,8 +42,7 @@ export const greekHebrewSymbols: SymbolTab[] = [
         { display: 'υ', latex: '\\upsilon', tooltip: '\\upsilon' },
         { display: 'ϱ', latex: '\\varrho', tooltip: '\\varrho' },
         { display: 'Π', latex: '\\Pi', tooltip: '\\Pi' },
-      ],
-      [
+
         { display: 'γ', latex: '\\gamma', tooltip: '\\gamma' },
         { display: 'ϕ', latex: '\\phi', tooltip: '\\phi' },
         { display: 'ξ', latex: '\\xi', tooltip: '\\xi' },
@@ -62,7 +53,5 @@ export const greekHebrewSymbols: SymbolTab[] = [
         { display: 'ζ', latex: '\\zeta', tooltip: '\\zeta' },
         { display: 'ϑ', latex: '\\vartheta', tooltip: '\\vartheta' },
         { display: 'Σ', latex: '\\Sigma', tooltip: '\\Sigma' },
-      ],
-    ],
-  },
+
 ];

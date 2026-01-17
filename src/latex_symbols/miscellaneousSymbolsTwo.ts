@@ -1,11 +1,7 @@
-import { SymbolTab } from "./interfaces";
+import { latexSymbol } from "./interfaces";
 
-export const miscellaneousSymbolsTwo: SymbolTab[] = [
-  {
-    id: 'miscellaneous-2',
-    label: '⊎⊕⊞',
-    symbols: [
-      [
+export const miscellaneousSymbolsTwo: latexSymbol[] = [
+
         { display: '*', latex: '\\ast', tooltip: '\\ast' },
         { display: '±', latex: '\\pm', tooltip: '\\pm' },
         { display: '∩', latex: '\\cap', tooltip: '\\cap' },
@@ -16,8 +12,7 @@ export const miscellaneousSymbolsTwo: SymbolTab[] = [
         { display: '▷', latex: '\\rhd', tooltip: '\\rhd' },
         { display: '·', latex: '\\cdot', tooltip: '\\cdot' },
         { display: '⨿', latex: '\\amalg', tooltip: '\\amalg' },
-      ],
-      [
+
         { display: '⊎', latex: '\\uplus', tooltip: '\\uplus' },
         { display: '◃', latex: '\\triangleleft', tooltip: '\\triangleleft' },
         { display: '○', latex: '\\circ', tooltip: '\\circ' },
@@ -28,8 +23,7 @@ export const miscellaneousSymbolsTwo: SymbolTab[] = [
         { display: '⊖', latex: '\\ominus', tooltip: '\\ominus' },
         { display: '∨', latex: '\\vee', tooltip: '\\vee' },
         { display: '⊴', latex: '\\unlhd', tooltip: '\\unlhd' },
-      ],
-      [
+
         { display: '◯', latex: '\\bigcirc', tooltip: '\\bigcirc' },
         { display: '⊕', latex: '\\oplus', tooltip: '\\oplus' },
         { display: '∧', latex: '\\wedge', tooltip: '\\wedge' },
@@ -40,8 +34,7 @@ export const miscellaneousSymbolsTwo: SymbolTab[] = [
         { display: '▽', latex: '\\bigtriangledown', tooltip: '\\bigtriangledown' },
         { display: '×', latex: '\\times', tooltip: '\\times' },
         { display: '⊗', latex: '\\otimes', tooltip: '\\otimes' },
-      ],
-      [
+
         { display: '‡', latex: '\\ddagger', tooltip: '\\ddagger' },
         { display: '△', latex: '\\bigtriangleup', tooltip: '\\bigtriangleup' },
         { display: '÷', latex: '\\div', tooltip: '\\div' },
@@ -52,8 +45,7 @@ export const miscellaneousSymbolsTwo: SymbolTab[] = [
         { display: '□', latex: '\\Box', tooltip: '\\Box' },
         { display: '∨', latex: '\\veebar', tooltip: '\\veebar' },
         { display: '⊤', latex: '\\top', tooltip: '\\top' },
-      ],
-      [
+
         { display: '⊛', latex: '\\circledast', tooltip: '\\circledast' },
         { display: '⊞', latex: '\\boxplus', tooltip: '\\boxplus' },
         { display: '⋎', latex: '\\curlyvee', tooltip: '\\curlyvee' },
@@ -64,8 +56,7 @@ export const miscellaneousSymbolsTwo: SymbolTab[] = [
         { display: '⋊', latex: '\\leftthreetimes', tooltip: '\\leftthreetimes' },
         { display: '⊖', latex: '\\circleddash', tooltip: '\\circleddash' },
         { display: '⊠', latex: '\\boxtimes', tooltip: '\\boxtimes' },
-      ],
-      [
+
         { display: '⋒', latex: '\\Cap', tooltip: '\\Cap' },
         { display: '⋓', latex: '\\Cup', tooltip: '\\Cup' },
         { display: '⊕', latex: '\\dotplus', tooltip: '\\dotplus' },
@@ -74,7 +65,5 @@ export const miscellaneousSymbolsTwo: SymbolTab[] = [
         { display: '∗', latex: '\\divideontimes', tooltip: '\\divideontimes' },
         { display: '▪', latex: '\\square', tooltip: '\\square' },
         { display: '⩞', latex: '\\doublebarwedge', tooltip: '\\doublebarwedge' },
-      ],
-    ],
-  },
+
 ];

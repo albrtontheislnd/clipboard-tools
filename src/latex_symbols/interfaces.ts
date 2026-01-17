@@ -1,11 +1,11 @@
-export interface Symbol {
+export interface latexSymbol {
   display: string;
   latex: string;
   tooltip: string;
 }
 
-export interface SymbolTab {
-  id: string;
-  label: string;
-  symbols: Symbol[][];
+export interface latexSuggestion {
+    command: string;
+    symbol: string;
+    category: string;
 }

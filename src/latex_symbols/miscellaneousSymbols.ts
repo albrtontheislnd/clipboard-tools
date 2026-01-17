@@ -1,12 +1,8 @@
-import { SymbolTab } from "./interfaces";
+import { latexSymbol } from "./interfaces";
 
 
-export const miscellaneousSymbols: SymbolTab[] = [
-  {
-    id: 'miscellaneous-1',
-    label: '∞∇∂',
-    symbols: [
-      [
+export const miscellaneousSymbols: latexSymbol[] = [
+
         { display: '∞', latex: '\\infty', tooltip: '\\infty' },
         { display: '∀', latex: '\\forall', tooltip: '\\forall' },
         { display: '𝕜', latex: '\\Bbbk', tooltip: '\\Bbbk' },
@@ -17,8 +13,7 @@ export const miscellaneousSymbols: SymbolTab[] = [
         { display: '∂', latex: '\\partial', tooltip: '\\partial' },
         { display: '∄', latex: '\\nexists', tooltip: '\\nexists' },
         { display: '∡', latex: '\\measuredangle', tooltip: '\\measuredangle' },
-      ],
-      [
+
         { display: 'ð', latex: '\\eth', tooltip: '\\eth' },
         { display: '∅', latex: '\\emptyset', tooltip: '\\emptyset' },
         { display: '∢', latex: '\\sphericalangle', tooltip: '\\sphericalangle' },
@@ -29,8 +24,7 @@ export const miscellaneousSymbols: SymbolTab[] = [
         { display: 'ℓ', latex: '\\ell', tooltip: '\\ell' },
         { display: 'ℏ', latex: '\\hbar', tooltip: '\\hbar' },
         { display: '∆', latex: '\\vartriangle', tooltip: '\\vartriangle' },
-      ],
-      [
+
         { display: '⋯', latex: '\\cdots', tooltip: '\\cdots' },
         { display: '∭∭', latex: '\\iiiiint', tooltip: '\\iiiiint' },
         { display: 'ℏ', latex: '\\hslash', tooltip: '\\hslash' },
@@ -41,12 +35,9 @@ export const miscellaneousSymbols: SymbolTab[] = [
         { display: '℧', latex: '\\mho', tooltip: '\\mho' },
         { display: '⋱', latex: '\\ddots', tooltip: '\\ddots' },
         { display: '′', latex: '\\prime', tooltip: '\\prime' },
-      ],
-      [
+
         { display: 'ℑ', latex: '\\Im', tooltip: '\\Im' },
         { display: 'ℜ', latex: '\\Re', tooltip: '\\Re' },
         { display: '√', latex: '\\surd', tooltip: '\\surd' },
-      ],
-    ],
-  },
+
 ];

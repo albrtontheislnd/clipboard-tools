@@ -1,11 +1,7 @@
-import { SymbolTab } from "./interfaces";
+import { latexSymbol } from "./interfaces";
 
-export const negatedRelations: SymbolTab[] = [
-  {
-    id: 'negated-relations-1',
-    label: '⊈≯≨',
-    symbols: [
-      [
+export const negatedRelations: latexSymbol[] = [
+
         { display: '≢', latex: '\\ncong', tooltip: '\\ncong' },
         { display: '≰', latex: '\\nleq', tooltip: '\\nleq' },
         { display: '≱', latex: '\\ngeq', tooltip: '\\ngeq' },
@@ -16,8 +12,7 @@ export const negatedRelations: SymbolTab[] = [
         { display: '⊉', latex: '\\nsupseteqq', tooltip: '\\nsupseteqq' },
         { display: '∦', latex: '\\nparallel', tooltip: '\\nparallel' },
         { display: '⪇', latex: '\\nleqslant', tooltip: '\\nleqslant' },
-      ],
-      [
+
         { display: '⪈', latex: '\\ngeqslant', tooltip: '\\ngeqslant' },
         { display: '⊈', latex: '\\nsubseteq', tooltip: '\\nsubseteq' },
         { display: '∦', latex: '\\nshortmid', tooltip: '\\nshortmid' },
@@ -28,8 +23,7 @@ export const negatedRelations: SymbolTab[] = [
         { display: '⊀', latex: '\\nprec', tooltip: '\\nprec' },
         { display: '⊁', latex: '\\nsucc', tooltip: '\\nsucc' },
         { display: '⊂', latex: '\\subsetneq', tooltip: '\\subsetneq' },
-      ],
-      [
+
         { display: '≁', latex: '\\nsim', tooltip: '\\nsim' },
         { display: '⪷', latex: '\\npreceq', tooltip: '\\npreceq' },
         { display: '⪸', latex: '\\nsucceq', tooltip: '\\nsucceq' },
@@ -40,8 +34,7 @@ export const negatedRelations: SymbolTab[] = [
         { display: '⊊', latex: '\\subsetneqq', tooltip: '\\subsetneqq' },
         { display: '⫋', latex: '\\nvDash', tooltip: '\\nvDash' },
         { display: '⪻', latex: '\\precnsim', tooltip: '\\precnsim' },
-      ],
-      [
+
         { display: '⪼', latex: '\\succnsim', tooltip: '\\succnsim' },
         { display: '⊋', latex: '\\supsetneqq', tooltip: '\\supsetneqq' },
         { display: '⫋', latex: '\\nvdash', tooltip: '\\nvdash' },
@@ -52,8 +45,7 @@ export const negatedRelations: SymbolTab[] = [
         { display: '≨', latex: '\\lneq', tooltip: '\\lneq' },
         { display: '≩', latex: '\\gneq', tooltip: '\\gneq' },
         { display: '⫋', latex: '\\varsupsetneq', tooltip: '\\varsupsetneq' },
-      ],
-      [
+
         { display: '⋬', latex: '\\ntrianglelefteq', tooltip: '\\ntrianglelefteq' },
         { display: '≨', latex: '\\lneqq', tooltip: '\\lneqq' },
         { display: '≩', latex: '\\gneqq', tooltip: '\\gneqq' },
@@ -64,7 +56,5 @@ export const negatedRelations: SymbolTab[] = [
         { display: '⋭', latex: '\\ntrianglerighteq', tooltip: '\\ntrianglerighteq' },
         { display: '≨', latex: '\\lvertneqq', tooltip: '\\lvertneqq' },
         { display: '≩', latex: '\\gvertneqq', tooltip: '\\gvertneqq' },
-      ],
-    ],
-  },
+
 ];

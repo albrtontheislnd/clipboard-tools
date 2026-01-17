@@ -1,12 +1,8 @@
-import { SymbolTab } from "./interfaces";
+import { latexSymbol } from "./interfaces";
 
 
-export const arrowSymbols: SymbolTab[] = [
-  {
-    id: 'arrows-1',
-    label: '←→↑',
-    symbols: [
-      [
+export const arrowSymbols: latexSymbol[] = [
+
         { display: '←', latex: '\\leftarrow', tooltip: '\\leftarrow' },
         { display: '⟵', latex: '\\longleftarrow', tooltip: '\\longleftarrow' },
         { display: '↑', latex: '\\uparrow', tooltip: '\\uparrow' },
@@ -16,8 +12,7 @@ export const arrowSymbols: SymbolTab[] = [
         { display: '→', latex: '\\rightarrow', tooltip: '\\rightarrow' },
         { display: '⟶', latex: '\\longrightarrow', tooltip: '\\longrightarrow' },
         { display: '↓', latex: '\\downarrow', tooltip: '\\downarrow' },
-      ],
-      [
+
         { display: '⇒', latex: '\\Rightarrow', tooltip: '\\Rightarrow' },
         { display: '⟹', latex: '\\Longrightarrow', tooltip: '\\Longrightarrow' },
         { display: '⇓', latex: '\\Downarrow', tooltip: '\\Downarrow' },
@@ -27,8 +22,7 @@ export const arrowSymbols: SymbolTab[] = [
         { display: '⇔', latex: '\\Leftrightarrow', tooltip: '\\Leftrightarrow' },
         { display: '⟺', latex: '\\Longleftrightarrow', tooltip: '\\Longleftrightarrow' },
         { display: '⇕', latex: '\\Updownarrow', tooltip: '\\Updownarrow' },
-      ],
-      [
+
         { display: '↦', latex: '\\mapsto', tooltip: '\\mapsto' },
         { display: '⟼', latex: '\\longmapsto', tooltip: '\\longmapsto' },
         { display: '↗', latex: '\\nearrow', tooltip: '\\nearrow' },
@@ -38,8 +32,7 @@ export const arrowSymbols: SymbolTab[] = [
         { display: '↼', latex: '\\leftharpoonup', tooltip: '\\leftharpoonup' },
         { display: '⇀', latex: '\\rightharpoonup', tooltip: '\\rightharpoonup' },
         { display: '↙', latex: '\\swarrow', tooltip: '\\swarrow' },
-      ],
-      [
+
         { display: '↽', latex: '\\leftharpoondown', tooltip: '\\leftharpoondown' },
         { display: '⇁', latex: '\\rightharpoondown', tooltip: '\\rightharpoondown' },
         { display: '↖', latex: '\\nwarrow', tooltip: '\\nwarrow' },
@@ -49,8 +42,7 @@ export const arrowSymbols: SymbolTab[] = [
         { display: '⇠', latex: '\\dashleftarrow', tooltip: '\\dashleftarrow' },
         { display: '⇆', latex: '\\leftleftarrows', tooltip: '\\leftleftarrows' },
         { display: '⇉', latex: '\\leftrightrightarrows', tooltip: '\\leftrightrightarrows' },
-      ],
-      [
+
         { display: '⇚', latex: '\\Lleftarrow', tooltip: '\\Lleftarrow' },
         { display: '↞', latex: '\\twoheadleftarrow', tooltip: '\\twoheadleftarrow' },
         { display: '↢', latex: '\\leftarrowtail', tooltip: '\\leftarrowtail' },
@@ -59,8 +51,7 @@ export const arrowSymbols: SymbolTab[] = [
         { display: '↶', latex: '\\curvearrowleft', tooltip: '\\curvearrowleft' },
         { display: '⥀', latex: '\\circlearrowleft', tooltip: '\\circlearrowleft' },
         { display: '↰', latex: '\\Lsh', tooltip: '\\Lsh' },
-      ],
-      [
+
         { display: '⇈', latex: '\\upuparrows', tooltip: '\\upuparrows' },
         { display: '↿', latex: '\\upharpoonleft', tooltip: '\\upharpoonleft' },
         { display: '↧', latex: '\\downharpoonleft', tooltip: '\\downharpoonleft' },
@@ -70,8 +61,7 @@ export const arrowSymbols: SymbolTab[] = [
         { display: '⇄', latex: '\\rightleftarrows', tooltip: '\\rightleftarrows' },
         { display: '⇛', latex: '\\rightrightarrows', tooltip: '\\rightrightarrows' },
         { display: '⇌', latex: '\\rightleftarrows', tooltip: '\\rightleftarrows' },
-      ],
-      [
+
         { display: '↠', latex: '\\twoheadrightarrow', tooltip: '\\twoheadrightarrow' },
         { display: '↣', latex: '\\rightarrowtail', tooltip: '\\rightarrowtail' },
         { display: '↬', latex: '\\looparrowright', tooltip: '\\looparrowright' },
@@ -81,15 +71,12 @@ export const arrowSymbols: SymbolTab[] = [
         { display: '⇊', latex: '\\downdownarrows', tooltip: '\\downdownarrows' },
         { display: '↾', latex: '\\upharpoonright', tooltip: '\\upharpoonright' },
         { display: '⇝', latex: '\\rightsquigarrow', tooltip: '\\rightsquigarrow' },
-      ],
-      [
+
         { display: '↚', latex: '\\nleftarrow', tooltip: '\\nleftarrow' },
         { display: '↛', latex: '\\nrightarrow', tooltip: '\\nrightarrow' },
         { display: '⇍', latex: '\\nLeftarrow', tooltip: '\\nLeftarrow' },
         { display: '⇏', latex: '\\nRightarrow', tooltip: '\\nRightarrow' },
         { display: '↮', latex: '\\nleftrightarrow', tooltip: '\\nleftrightarrow' },
         { display: '⇎', latex: '\\nLeftrightarrow', tooltip: '\\nLeftrightarrow' },
-      ],
-    ],
-  },
+
 ];

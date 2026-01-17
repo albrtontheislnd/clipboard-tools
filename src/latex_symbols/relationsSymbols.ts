@@ -1,11 +1,7 @@
-import { SymbolTab } from "./interfaces";
+import { latexSymbol } from "./interfaces";
 
-export const relationsSymbols: SymbolTab[] = [
-  {
-    id: 'relations-1',
-    label: '≡≤≥',
-    symbols: [
-      [
+export const relationsSymbols: latexSymbol[] = [
+
         { display: '≡', latex: '\\equiv', tooltip: '\\equiv' },
         { display: '≤', latex: '\\leq', tooltip: '\\leq' },
         { display: '≥', latex: '\\geq', tooltip: '\\geq' },
@@ -14,8 +10,7 @@ export const relationsSymbols: SymbolTab[] = [
         { display: '≺', latex: '\\prec', tooltip: '\\prec' },
         { display: '≻', latex: '\\succ', tooltip: '\\succ' },
         { display: '∣', latex: '\\mid', tooltip: '\\mid' },
-      ],
-      [
+
         { display: '≠', latex: '\\neq', tooltip: '\\neq' },
         { display: '⪯', latex: '\\preceq', tooltip: '\\preceq' },
         { display: '⪰', latex: '\\succeq', tooltip: '\\succeq' },
@@ -24,8 +19,7 @@ export const relationsSymbols: SymbolTab[] = [
         { display: '≪', latex: '\\ll', tooltip: '\\ll' },
         { display: '≫', latex: '\\gg', tooltip: '\\gg' },
         { display: '⋈', latex: '\\bowtie', tooltip: '\\bowtie' },
-      ],
-      [
+
         { display: '≃', latex: '\\simeq', tooltip: '\\simeq' },
         { display: '⊂', latex: '\\subset', tooltip: '\\subset' },
         { display: '⊃', latex: '\\supset', tooltip: '\\supset' },
@@ -34,8 +28,7 @@ export const relationsSymbols: SymbolTab[] = [
         { display: '⊆', latex: '\\subseteq', tooltip: '\\subseteq' },
         { display: '⊇', latex: '\\supseteq', tooltip: '\\supseteq' },
         { display: '⋉', latex: '\\ltimes', tooltip: '\\ltimes' },
-      ],
-      [
+
         { display: '≍', latex: '\\asymp', tooltip: '\\asymp' },
         { display: '⊏', latex: '\\sqsubset', tooltip: '\\sqsubset' },
         { display: '⊐', latex: '\\sqsupset', tooltip: '\\sqsupset' },
@@ -44,8 +37,7 @@ export const relationsSymbols: SymbolTab[] = [
         { display: '⊑', latex: '\\sqsubseteq', tooltip: '\\sqsubseteq' },
         { display: '⊒', latex: '\\sqsupseteq', tooltip: '\\sqsupseteq' },
         { display: '⌣', latex: '\\smile', tooltip: '\\smile' },
-      ],
-      [
+
         { display: '∝', latex: '\\propto', tooltip: '\\propto' },
         { display: '⊣', latex: '\\dashv', tooltip: '\\dashv' },
         { display: '⊢', latex: '\\vdash', tooltip: '\\vdash' },
@@ -54,14 +46,7 @@ export const relationsSymbols: SymbolTab[] = [
         { display: '∈', latex: '\\in', tooltip: '\\in' },
         { display: '∋', latex: '\\ni', tooltip: '\\ni' },
         { display: '∉', latex: '\\notin', tooltip: '\\notin' },
-      ],
-    ],
-  },
-  {
-    id: 'relations-2',
-    label: '≲≅⊆',
-    symbols: [
-      [
+
         { display: '≲', latex: '\\lesssim', tooltip: '\\lesssim' },
         { display: '≤', latex: '\\leqq', tooltip: '\\leqq' },
         { display: '≥', latex: '\\geqq', tooltip: '\\geqq' },
@@ -72,8 +57,7 @@ export const relationsSymbols: SymbolTab[] = [
         { display: '⋛', latex: '\\lesseqgtr', tooltip: '\\lesseqgtr' },
         { display: '≃', latex: '\\backsimeq', tooltip: '\\backsimeq' },
         { display: '⪉', latex: '\\lessapprox', tooltip: '\\lessapprox' },
-      ],
-      [
+
         { display: '⪊', latex: '\\gtrapprox', tooltip: '\\gtrapprox' },
         { display: '⋜', latex: '\\lesseqqgtr', tooltip: '\\lesseqqgtr' },
         { display: '≍', latex: '\\backsim', tooltip: '\\backsim' },
@@ -84,8 +68,7 @@ export const relationsSymbols: SymbolTab[] = [
         { display: '⪅', latex: '\\lessdot', tooltip: '\\lessdot' },
         { display: '⪆', latex: '\\gtrdot', tooltip: '\\gtrdot' },
         { display: '≷', latex: '\\gtrless', tooltip: '\\gtrless' },
-      ],
-      [
+
         { display: '≅', latex: '\\circeq', tooltip: '\\circeq' },
         { display: '⋦', latex: '\\lesssim', tooltip: '\\lesssim' },
         { display: '⋧', latex: '\\gtrsim', tooltip: '\\gtrsim' },
@@ -95,8 +78,7 @@ export const relationsSymbols: SymbolTab[] = [
         { display: '⋧', latex: '\\eqslantgtr', tooltip: '\\eqslantgtr' },
         { display: '≎', latex: '\\Bumpeq', tooltip: '\\Bumpeq' },
         { display: '⋞', latex: '\\precsim', tooltip: '\\precsim' },
-      ],
-      [
+
         { display: '⋟', latex: '\\succsim', tooltip: '\\succsim' },
         { display: '≐', latex: '\\doteqdot', tooltip: '\\doteqdot' },
         { display: '⋞', latex: '\\precapprox', tooltip: '\\precapprox' },
@@ -106,14 +88,7 @@ export const relationsSymbols: SymbolTab[] = [
         { display: '⊂', latex: '\\Subset', tooltip: '\\Subset' },
         { display: '⊃', latex: '\\Supset', tooltip: '\\Supset' },
         { display: '⌣', latex: '\\smallfrown', tooltip: '\\smallfrown' },
-      ],
-    ],
-  },
-  {
-    id: 'relations-2',
-    label: '⋟≢≓',
-    symbols: [
-      [
+
         { display: '≒', latex: '\\fallingdotseq', tooltip: '\\fallingdotseq' },
         { display: '⊆', latex: '\\subseteqq', tooltip: '\\subseteqq' },
         { display: '⊇', latex: '\\supseteqq', tooltip: '\\supseteqq' },
@@ -124,8 +99,7 @@ export const relationsSymbols: SymbolTab[] = [
         { display: '⊢', latex: '\\Vdash', tooltip: '\\Vdash' },
         { display: '∝', latex: '\\varpropto', tooltip: '\\varpropto' },
         { display: '⋞', latex: '\\preccurlyeq', tooltip: '\\preccurlyeq' },
-      ],
-      [
+
         { display: '⋟', latex: '\\succcurlyeq', tooltip: '\\succcurlyeq' },
         { display: '⊣', latex: '\\vDash', tooltip: '\\vDash' },
         { display: '∴', latex: '\\therefore', tooltip: '\\therefore' },
@@ -136,8 +110,7 @@ export const relationsSymbols: SymbolTab[] = [
         { display: '◀', latex: '\\blacktriangleleft', tooltip: '\\blacktriangleleft' },
         { display: '▶', latex: '\\blacktriangleright', tooltip: '\\blacktriangleright' },
         { display: '∥', latex: '\\shortparallel', tooltip: '\\shortparallel' },
-      ],
-      [
+
         { display: '≢', latex: '\\eqcirc', tooltip: '\\eqcirc' },
         { display: '◁', latex: '\\trianglelefteq', tooltip: '\\trianglelefteq' },
         { display: '▷', latex: '\\trianglerighteq', tooltip: '\\trianglerighteq' },
@@ -145,9 +118,7 @@ export const relationsSymbols: SymbolTab[] = [
         { display: '≠', latex: '\\neq', tooltip: '\\neq' },
         { display: '▽', latex: '\\vartriangleleft', tooltip: '\\vartriangleleft' },
         { display: '△', latex: '\\vartriangleright', tooltip: '\\vartriangleright' },
-      ],
-    ],
-  },
+
 ];
 
 
