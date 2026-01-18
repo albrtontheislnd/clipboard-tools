@@ -1,5 +1,5 @@
 import { Menu, MenuItem, Editor, MarkdownView } from "obsidian";
-import { insertPromptCallout } from "./libs/prompt-parser";
+import { insertPromptCallout } from "./prompt-parser";
 
 export function registerContextMenu(
     menu: Menu, 

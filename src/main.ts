@@ -1,17 +1,17 @@
 import { Editor, MarkdownFileInfo, MarkdownView, Notice, Plugin } from 'obsidian';
 import axios from 'axios';
-import { tUtils } from './utils';
+import { tUtils } from './libs/utils';
 import { DEFAULT_SETTINGS, ImgOptimizerPluginSettingsTab } from './settings';
-import { ImgOptimizerPluginSettings } from './interfaces';
+import { ImgOptimizerPluginSettings } from './libs/plugin_interfaces';
 import { ImageTextModal } from './modals/aiprompt_modal';
 import { ChangeCaseModal } from './modals/changecase_modal';
-import { LoadingModal } from './loadingmodal';
-import { convertImageToMarkdown, extractTextFromImage, insertContent } from './ocr-utils';
+import { LoadingModal } from './modals/loading_modal';
+import { convertImageToMarkdown, extractTextFromImage, insertContent } from './libs/ocr-utils';
 import * as path from 'path';
-import { registerContextMenu } from './contextmenu';
-import { zhongwenTasks } from './zhongwen';
+import { registerContextMenu } from './libs/contextmenu';
+import { zhongwenTasks } from './libs/zhongwen';
 import { appendToPromptCallout, getPromptCallouts, replacePromptCallout } from './libs/prompt-parser';
-import { LatexSuggest } from './autosuggestions';
+import { LatexSuggest } from './libs/autosuggestions';
 import { InsertLatexModal } from './modals/latex_modal';
 
 export default class ImgWebpOptimizerPlugin extends Plugin {

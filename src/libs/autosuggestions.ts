@@ -1,12 +1,12 @@
 import { App, Editor, EditorPosition, EditorSuggest, EditorSuggestContext, EditorSuggestTriggerInfo, TFile} from 'obsidian';
-import ImgWebpOptimizerPlugin from './main';
+import ImgWebpOptimizerPlugin from '../main';
 import { syntaxTree } from "@codemirror/language";
 import type { SyntaxNode } from "@lezer/common";
 
 import { createApp, App as VueApp } from 'vue';
-import SuggestionItem from './components/SuggestionItem.vue';
-import { latexCategories } from './latex_symbols/latexAll';
-import { latexSuggestion } from './latex_symbols/interfaces';
+import SuggestionItem from '../components/SuggestionItem.vue';
+import { latexCategories } from '../latex_symbols/latexAll';
+import { latexSuggestion } from '../latex_symbols/interfaces';
 
 
 

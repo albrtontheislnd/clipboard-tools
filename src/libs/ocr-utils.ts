@@ -1,6 +1,6 @@
 import { Editor, Notice } from 'obsidian';
 import axios from 'axios';
-import { stringOrEmptySchema } from './interfaces';
+import { stringOrEmptySchema } from './plugin_interfaces';
 import { tUtils } from './utils';
 
 interface OCRResponse {
