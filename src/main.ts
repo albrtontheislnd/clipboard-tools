@@ -1,4 +1,4 @@
-import { Editor, MarkdownFileInfo, MarkdownView, Notice, Plugin } from 'obsidian';
+import { Editor, MarkdownFileInfo, MarkdownView, Notice, Plugin, WorkspaceLeaf } from 'obsidian';
 import axios from 'axios';
 import { tUtils } from './libs/utils';
 import { DEFAULT_SETTINGS, ImgOptimizerPluginSettingsTab } from './settings';
@@ -13,6 +13,7 @@ import { zhongwenTasks } from './libs/zhongwen';
 import { appendToPromptCallout, getPromptCallouts, replacePromptCallout } from './libs/prompt-parser';
 import { LatexSuggest } from './libs/autosuggestions';
 import { InsertLatexModal } from './modals/latex_modal';
+import { DictionaryView, VIEW_TYPE_DICTIONARY } from './dict/dictUI';
 
 export default class ImgWebpOptimizerPlugin extends Plugin {
 	settings?: ImgOptimizerPluginSettings;
@@ -30,99 +31,127 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 
 	async onload() {
 		this.app.workspace.onLayoutReady(async () => {
-			await this.loadSettings();
-			this.addSettingTab(new ImgOptimizerPluginSettingsTab(this.app, this));
-
-			// This adds an editor command that can perform some operation on the current editor instance
-			this.addCommand({
-				id: 'paste-optimized-img',
-				name: 'Embed clipboard image in WEBP/AVIF/PNG/JPEG format',
-				editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
-					if (view instanceof MarkdownView) {
-						// Handle the case where ctx is a MarkdownFileInfo
-						await this.handleClipboardImage(editor, view);
-					}
-				}
-			});
-
-			this.addCommand({
-				id: 's3-optimized-img',
-				name: 'Optimize and save to S3 Storage',
-				editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
-					if (view instanceof MarkdownView) {
-						// Handle the case where ctx is a MarkdownFileInfo
-						await this.handleClipboardImage(editor, view, true);
-					}
-				}
-			});
-
-			this.addCommand({
-				id: 'ai-convert-md',
-				name: 'Convert clipboard image to Markdown/Latex',
-				editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
-					if (view instanceof MarkdownView) {
-						// Handle the case where ctx is a MarkdownFileInfo
-						await this.handleOCR(editor);
-					}
-				}
-			});
-
-			this.addCommand({
-				id: 'extract-text-image',
-				name: 'Extract text from Image',
-				editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
-					if (view instanceof MarkdownView) {
-						// Handle the case where ctx is a MarkdownFileInfo
-						await this.handleOCR(editor, true);
-					}
-				}
-			});
-
-			// editor-menu
-			this.registerEvent(
-				this.app.workspace.on('editor-menu', (menu, editor, view) => {
-					if (view instanceof MarkdownView) {
-
-						menu.addItem((item) => {
-							item.setTitle(`Alapaki: Embed (${this.settings?.imageFormat.toUpperCase()})`).setIcon('image-plus')
-								.onClick(async () => await this.handleClipboardImage(editor, view));
-						});
-
-						menu.addItem((item) => {
-							item.setTitle(`Alapaki: Save to S3 (${this.settings?.imageFormat.toUpperCase()})`).setIcon('image-plus')
-								.onClick(async () => await this.handleClipboardImage(editor, view, this.settings?.useS3Storage));
-						});
-
-						menu.addItem((item) => {
-							item.setTitle(`Alapaki: Markdownify`).setIcon('brain-circuit')
-								.onClick(async () => await this.handleOCR(editor));
-						});
-
-						menu.addItem((item) => {
-							item.setTitle(`Alapaki: OCR`).setIcon('brain-circuit')
-								.onClick(async () => await this.handleOCR(editor, true));
-						});
-
-						menu.addItem((item) => {
-							item.setTitle(`Alapaki: Summarize`).setIcon('clipboard-pen-line')
-								.onClick(async () => await this.handleSummarize(editor));
-						});
-
-						menu.addItem((item) => {
-							item.setTitle(`Alapaki: Latex Symbols`).setIcon('clipboard-pen-line')
-								.onClick(async () => await this.handleLatexModal(editor));
-						});
-
-						// register submenu:
-						registerContextMenu(menu, editor, view, this.handleWrapCallout.bind(this), this.handleChangeCase.bind(this), this.handleZhongwen.bind(this), this.handlePromptCallouts.bind(this));
-					}
-				})
-			);
+			await this.initializePlugin();
 		});
+	}
+
+	/**
+	 * Initializes the plugin after the workspace layout is ready.
+	 * This function handles settings loading, command registration, and event setup.
+	 */
+	async initializePlugin() {
+		await this.loadSettings();
+		this.addSettingTab(new ImgOptimizerPluginSettingsTab(this.app, this));
+
+		// This adds an editor command that can perform some operation on the current editor instance
+		this.addCommand({
+			id: 'paste-optimized-img',
+			name: 'Embed clipboard image in WEBP/AVIF/PNG/JPEG format',
+			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
+				if (view instanceof MarkdownView) {
+					// Handle the case where ctx is a MarkdownFileInfo
+					await this.handleClipboardImage(editor, view);
+				}
+			}
+		});
+
+		this.addCommand({
+			id: 's3-optimized-img',
+			name: 'Optimize and save to S3 Storage',
+			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
+				if (view instanceof MarkdownView) {
+					// Handle the case where ctx is a MarkdownFileInfo
+					await this.handleClipboardImage(editor, view, true);
+				}
+			}
+		});
+
+		this.addCommand({
+			id: 'ai-convert-md',
+			name: 'Convert clipboard image to Markdown/Latex',
+			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
+				if (view instanceof MarkdownView) {
+					// Handle the case where ctx is a MarkdownFileInfo
+					await this.handleOCR(editor);
+				}
+			}
+		});
+
+		this.addCommand({
+			id: 'extract-text-image',
+			name: 'Extract text from Image',
+			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
+				if (view instanceof MarkdownView) {
+					// Handle the case where ctx is a MarkdownFileInfo
+					await this.handleOCR(editor, true);
+				}
+			}
+		});
+
+		// editor-menu
+		this.registerEvent(
+			this.app.workspace.on('editor-menu', (menu, editor, view) => {
+				if (view instanceof MarkdownView) {
+
+					menu.addItem((item) => {
+						item.setTitle(`Alapaki: Embed (${this.settings?.imageFormat.toUpperCase()})`).setIcon('image-plus')
+							.onClick(async () => await this.handleClipboardImage(editor, view));
+					});
+
+					menu.addItem((item) => {
+						item.setTitle(`Alapaki: Save to S3 (${this.settings?.imageFormat.toUpperCase()})`).setIcon('image-plus')
+							.onClick(async () => await this.handleClipboardImage(editor, view, this.settings?.useS3Storage));
+					});
+
+					menu.addItem((item) => {
+						item.setTitle(`Alapaki: Markdownify`).setIcon('brain-circuit')
+							.onClick(async () => await this.handleOCR(editor));
+					});
+
+					menu.addItem((item) => {
+						item.setTitle(`Alapaki: OCR`).setIcon('brain-circuit')
+							.onClick(async () => await this.handleOCR(editor, true));
+					});
+
+					menu.addItem((item) => {
+						item.setTitle(`Alapaki: Summarize`).setIcon('clipboard-pen-line')
+							.onClick(async () => await this.handleSummarize(editor));
+					});
+
+					menu.addItem((item) => {
+						item.setTitle(`Alapaki: Latex Symbols`).setIcon('clipboard-pen-line')
+							.onClick(async () => await this.handleLatexModal(editor));
+					});
+
+					// register submenu:
+					registerContextMenu(menu, editor, view, this.handleWrapCallout.bind(this), this.handleChangeCase.bind(this), this.handleZhongwen.bind(this), this.handlePromptCallouts.bind(this));
+				}
+			})
+		);
 
         // Register the suggestion provider
         this.latexSuggest = new LatexSuggest(this.app, this);
         this.registerEditorSuggest(this.latexSuggest);
+
+		// Register the custom view
+		this.registerView(
+			VIEW_TYPE_DICTIONARY,
+			(leaf) => new DictionaryView(leaf, this)
+		);
+
+		// Add ribbon icon to open dictionary
+		this.addRibbonIcon('book-a', 'Open Alapaki Dictionary', () => {
+			this.activateDictionaryView();
+		});
+
+		// Add command to open dictionary
+		this.addCommand({
+			id: 'open-dictionary-view',
+			name: 'Open Alapaki Dictionary',
+			callback: () => {
+				this.activateDictionaryView();
+			}
+		});
 	}
 
 	/**
@@ -679,4 +708,28 @@ Visually separate sections using spacing and/or bold text only.`
 			modal.close();
 		}		
     }
+
+	async activateDictionaryView() {
+		const { workspace } = this.app;
+
+		let leaf: WorkspaceLeaf | null = null;
+		const leaves = workspace.getLeavesOfType(VIEW_TYPE_DICTIONARY);
+
+		if (leaves.length > 0) {
+			// A dictionary view already exists, use it
+			leaf = leaves[0];
+		} else {
+			// Create new leaf in right sidebar
+			leaf = workspace.getRightLeaf(false);
+			await leaf?.setViewState({
+				type: VIEW_TYPE_DICTIONARY,
+				active: true,
+			});
+		}
+
+		// Reveal the leaf
+		if (leaf) {
+			workspace.revealLeaf(leaf);
+		}
+	}
 }

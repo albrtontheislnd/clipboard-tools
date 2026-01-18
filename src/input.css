@@ -1,3 +1,19 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Custom styles for the dictionary view */
+.dictionary-vue-container {
+  height: 100%;
+  width: 100%;
+}
+
+/* Dark mode support for Obsidian */
+.theme-dark .dictionary-vue-container {
+  color-scheme: dark;
+}
+
+/* Ensure proper scrolling */
+.dictionary-vue-container > div {
+  height: 100%;
+}
