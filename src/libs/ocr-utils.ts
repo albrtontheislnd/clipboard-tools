@@ -70,6 +70,22 @@ export async function uploadToOCRVisionEndpoint(blob: Blob, context: OCRPluginCo
 	return response.data;
 }
 
+export async function uploadToOCRQuickEndpoint(blob: Blob, context: OCRPluginContext): Promise<OCRResponse> {
+	const endpointUrl = `${context.settings.apiServer}/images/ocr-quick`;
+
+	const formData = new FormData();
+	formData.append('image', blob, 'image.png');
+
+	const response = await axios.post(endpointUrl, formData, {
+		headers: {
+			'Content-Type': 'multipart/form-data',
+		},
+		responseType: 'json',
+	});
+
+	return response.data;
+}
+
 /**
  * Optimize image to WEBP format with size constraints (max 1024x1024).
  */
@@ -151,6 +167,21 @@ export async function extractTextFromImage(blob: Blob, context: OCRPluginContext
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 		console.error('Error in extractTextFromImage:', error);
+		return `Error processing image: ${errorMessage}`;
+	}
+}
+
+export async function quickExtractTextFromImage(blob: Blob, context: OCRPluginContext): Promise<string> {
+	try {
+		// Upload to Quick OCR endpoint
+		const response = await uploadToOCRQuickEndpoint(blob, context);
+
+		// Handle response and return text
+		return handleOCRResponse(response);
+
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+		console.error('Error in quickExtractTextFromImage:', error);
 		return `Error processing image: ${errorMessage}`;
 	}
 }

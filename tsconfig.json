@@ -5,6 +5,7 @@
     "module": "ESNext",
     "lib": ["ES2020", "DOM", "DOM.Iterable", "ES5", "ES6", "ES7"],
     "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
     "strictNullChecks": true,
     "importHelpers": true,
     "inlineSourceMap": true,
@@ -28,6 +29,7 @@
 
     /* Path resolution */
     "baseUrl": ".",
+    "ignoreDeprecations": "5.0",
     "paths": {
       "@/*": ["src/*"]
     }

@@ -6,7 +6,7 @@ import { ImgOptimizerPluginSettings } from './libs/plugin_interfaces';
 import { ImageTextModal } from './modals/aiprompt_modal';
 import { ChangeCaseModal } from './modals/changecase_modal';
 import { LoadingModal } from './modals/loading_modal';
-import { convertImageToMarkdown, extractTextFromImage, insertContent } from './libs/ocr-utils';
+import { convertImageToMarkdown, extractTextFromImage, insertContent, quickExtractTextFromImage } from './libs/ocr-utils';
 import * as path from 'path';
 import { registerContextMenu } from './libs/contextmenu';
 import { zhongwenTasks } from './libs/zhongwen';
@@ -71,8 +71,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			name: 'Convert clipboard image to Markdown/Latex',
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
 				if (view instanceof MarkdownView) {
-					// Handle the case where ctx is a MarkdownFileInfo
-					await this.handleOCR(editor);
+					await this.handleOCR(editor, 'markdown');
 				}
 			}
 		});
@@ -82,8 +81,17 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			name: 'Extract text from Image',
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
 				if (view instanceof MarkdownView) {
-					// Handle the case where ctx is a MarkdownFileInfo
-					await this.handleOCR(editor, true);
+					await this.handleOCR(editor, 'extract-text');
+				}
+			}
+		});
+
+		this.addCommand({
+			id: 'extract-text-image-quick',
+			name: 'Quick Extract text from Image',
+			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
+				if (view instanceof MarkdownView) {
+					await this.handleOCR(editor, 'quick-extract');
 				}
 			}
 		});
@@ -105,12 +113,17 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 
 					menu.addItem((item) => {
 						item.setTitle(`Alapaki: Markdownify`).setIcon('brain-circuit')
-							.onClick(async () => await this.handleOCR(editor));
+							.onClick(async () => await this.handleOCR(editor, 'markdown'));
 					});
 
 					menu.addItem((item) => {
 						item.setTitle(`Alapaki: OCR`).setIcon('brain-circuit')
-							.onClick(async () => await this.handleOCR(editor, true));
+							.onClick(async () => await this.handleOCR(editor, 'extract-text'));
+					});
+
+					menu.addItem((item) => {
+						item.setTitle(`Alapaki: Quick OCR`).setIcon('brain-circuit')
+							.onClick(async () => await this.handleOCR(editor, 'quick-extract'));
 					});
 
 					menu.addItem((item) => {
@@ -118,13 +131,8 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 							.onClick(async () => await this.handleSummarize(editor));
 					});
 
-					menu.addItem((item) => {
-						item.setTitle(`Alapaki: Latex Symbols`).setIcon('clipboard-pen-line')
-							.onClick(async () => await this.handleLatexModal(editor));
-					});
-
 					// register submenu:
-					registerContextMenu(menu, editor, view, this.handleWrapCallout.bind(this), this.handleChangeCase.bind(this), this.handleZhongwen.bind(this), this.handlePromptCallouts.bind(this));
+					registerContextMenu(menu, editor, view, this.handleWrapCallout.bind(this), this.handleChangeCase.bind(this), this.handleZhongwen.bind(this), this.handlePromptCallouts.bind(this), this.handleLatexModal.bind(this));
 				}
 			})
 		);
@@ -338,7 +346,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	 * Shows a modal to confirm the extracted text and allow the user to
 	 * include the image in the markdown if desired.
 	 */
-    async handleOCR(editor: Editor, extractText: boolean = false) {
+    async handleOCR(editor: Editor, mode: 'markdown' | 'extract-text' | 'quick-extract' = 'markdown') {
 		const clipboardItems = await navigator.clipboard.read();
 
 		if(this.locked) {
@@ -355,8 +363,10 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			.map(async (item) => {
 				const blob = await item.getType("image/png");
 				let resultText = '';
-				if(extractText) {
+				if (mode === 'extract-text') {
 					resultText = await extractTextFromImage(blob, context);
+				} else if (mode === 'quick-extract') {
+					resultText = await quickExtractTextFromImage(blob, context);
 				} else {
 					resultText = await convertImageToMarkdown(blob, context);
 				}

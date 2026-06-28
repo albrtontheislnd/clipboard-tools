@@ -8,7 +8,8 @@ export function registerContextMenu(
     handleWrapCallout: (editor: Editor, view: MarkdownView) => Promise<void>, 
     handleChangeCase: (editor: Editor) => Promise<void>,
     handleZhongwen: (editor: Editor, tasks: 'grammar' | 'word-usage-en' | 'word-usage-vi' | 'explain') => Promise<void>,
-    handlePromptCallouts: () => Promise<void>
+    handlePromptCallouts: () => Promise<void>,
+    handleLatexModal: (editor: Editor) => Promise<void>
 ) {
     // Add a main menu item with submenu
     let subMenu: Menu;
@@ -31,6 +32,14 @@ export function registerContextMenu(
             subItem.setTitle("Wrap as Callout").setIcon('wrap-text')
                 .onClick(async () => {
                     await handleWrapCallout(editor, view);
+                });
+        });
+
+        // Add Latex Symbols
+        subMenu.addItem((subItem: MenuItem) => {
+            subItem.setTitle("Latex Symbols").setIcon('clipboard-pen-line')
+                .onClick(async () => {
+                    await handleLatexModal(editor);
                 });
         });
 

@@ -23,12 +23,20 @@ export class tUtils {
 		return `img_${isoDateTime}_${randomString}${formattedExtension}`;
 	}
 
-	static localPathToPartialUrl(localFilePath: string): string {
+	static localPathToPartialUrl(localFilePath: string, defName: string = 'uploads'): string {
 		// Normalize paths to ensure consistent separators
 		localFilePath = localFilePath.replace(/\\/g, '/');
 		localFilePath = localFilePath.replace(/\/+/g, '/');
 		localFilePath = localFilePath.replace(/^\/|\/$/g, '');
 		localFilePath = localFilePath.replace(/[^a-zA-Z0-9\.-_\/]/g, '');
+
+		if (
+		localFilePath === '.' ||
+		localFilePath.startsWith('../') ||
+		localFilePath.includes('/../')
+		) {
+			localFilePath = defName;
+		}		
 		return localFilePath;
 	}
 
