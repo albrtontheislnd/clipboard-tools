@@ -6,7 +6,7 @@ import { ImgOptimizerPluginSettings } from './libs/plugin_interfaces';
 import { ImageTextModal } from './modals/aiprompt_modal';
 import { ChangeCaseModal } from './modals/changecase_modal';
 import { LoadingModal } from './modals/loading_modal';
-import { convertImageToMarkdown, extractTextFromImage, insertContent, quickExtractTextFromImage } from './libs/ocr-utils';
+import { convertOCRAI, convertOCRCompanion, convertOCRMarkdownify, convertOCRNative, insertContent } from './libs/ocr-utils';
 import * as path from 'path';
 import { registerContextMenu } from './libs/contextmenu';
 import { zhongwenTasks } from './libs/zhongwen';
@@ -67,31 +67,51 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: 'ai-convert-md',
-			name: 'Convert clipboard image to Markdown/Latex',
+			id: 'alapaki-ocr-markdownify',
+			name: 'Image to Markdown/Latex (LLM)',
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
 				if (view instanceof MarkdownView) {
-					await this.handleOCR(editor, 'markdown');
+					await this.handleOCR(editor, 'ocr-markdownify');
 				}
 			}
 		});
 
 		this.addCommand({
-			id: 'extract-text-image',
-			name: 'Extract text from Image',
+			id: 'alapaki-ocr-ai',
+			name: 'Image to Markdown/Latex (preset AI Engine)',
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
 				if (view instanceof MarkdownView) {
-					await this.handleOCR(editor, 'extract-text');
+					await this.handleOCR(editor, 'ocr-ai');
 				}
 			}
 		});
 
 		this.addCommand({
-			id: 'extract-text-image-quick',
-			name: 'Quick Extract text from Image',
+			id: 'alapaki-ocr-native',
+			name: 'Image to Text (experimental native API)',
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
 				if (view instanceof MarkdownView) {
-					await this.handleOCR(editor, 'quick-extract');
+					await this.handleOCR(editor, 'ocr-native');
+				}
+			}
+		});
+
+		this.addCommand({
+			id: 'alapaki-ocr-companion',
+			name: 'Image to Text (companion app)',
+			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
+				if (view instanceof MarkdownView) {
+					await this.handleOCR(editor, 'ocr-companion');
+				}
+			}
+		});
+
+		this.addCommand({
+			id: 'alapaki-summarize',
+			name: 'Summarize text (LLM)',
+			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
+				if (view instanceof MarkdownView) {
+					await this.handleSummarize(editor);
 				}
 			}
 		});
@@ -102,32 +122,32 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 				if (view instanceof MarkdownView) {
 
 					menu.addItem((item) => {
-						item.setTitle(`Alapaki: Embed (${this.settings?.imageFormat.toUpperCase()})`).setIcon('image-plus')
+						item.setTitle(`Embed (${this.settings?.imageFormat.toUpperCase()})`).setIcon('image-plus')
 							.onClick(async () => await this.handleClipboardImage(editor, view));
 					});
 
 					menu.addItem((item) => {
-						item.setTitle(`Alapaki: Save to S3 (${this.settings?.imageFormat.toUpperCase()})`).setIcon('image-plus')
+						item.setTitle(`Save to S3 (${this.settings?.imageFormat.toUpperCase()})`).setIcon('image-plus')
 							.onClick(async () => await this.handleClipboardImage(editor, view, this.settings?.useS3Storage));
 					});
 
 					menu.addItem((item) => {
-						item.setTitle(`Alapaki: Markdownify`).setIcon('brain-circuit')
-							.onClick(async () => await this.handleOCR(editor, 'markdown'));
+						item.setTitle(`Markdownify`).setIcon('brain-circuit')
+							.onClick(async () => await this.handleOCR(editor, 'ocr-markdownify'));
 					});
 
 					menu.addItem((item) => {
-						item.setTitle(`Alapaki: OCR`).setIcon('brain-circuit')
-							.onClick(async () => await this.handleOCR(editor, 'extract-text'));
+						item.setTitle(`OCR Preset`).setIcon('brain-circuit')
+							.onClick(async () => await this.handleOCR(editor, 'ocr-ai'));
 					});
 
 					menu.addItem((item) => {
-						item.setTitle(`Alapaki: Quick OCR`).setIcon('brain-circuit')
-							.onClick(async () => await this.handleOCR(editor, 'quick-extract'));
+						item.setTitle(`OCR Companion/Native`).setIcon('brain-circuit')
+							.onClick(async () => await this.handleOCR(editor, 'ocr-companion'));
 					});
 
 					menu.addItem((item) => {
-						item.setTitle(`Alapaki: Summarize`).setIcon('clipboard-pen-line')
+						item.setTitle(`Summarize`).setIcon('clipboard-pen-line')
 							.onClick(async () => await this.handleSummarize(editor));
 					});
 
@@ -346,7 +366,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	 * Shows a modal to confirm the extracted text and allow the user to
 	 * include the image in the markdown if desired.
 	 */
-    async handleOCR(editor: Editor, mode: 'markdown' | 'extract-text' | 'quick-extract' = 'markdown') {
+    async handleOCR(editor: Editor, mode: 'ocr-markdownify' | 'ocr-ai' | 'ocr-companion' | 'ocr-native' = 'ocr-markdownify') {
 		const clipboardItems = await navigator.clipboard.read();
 
 		if(this.locked) {
@@ -363,12 +383,14 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			.map(async (item) => {
 				const blob = await item.getType("image/png");
 				let resultText = '';
-				if (mode === 'extract-text') {
-					resultText = await extractTextFromImage(blob, context);
-				} else if (mode === 'quick-extract') {
-					resultText = await quickExtractTextFromImage(blob, context);
+				if (mode === 'ocr-ai') {
+					resultText = await convertOCRAI(blob, context);
+				} else if (mode === 'ocr-native') {
+					resultText = await convertOCRNative(blob, context);
+				} else if (mode === 'ocr-companion') {
+					resultText = await convertOCRCompanion(blob, context);
 				} else {
-					resultText = await convertImageToMarkdown(blob, context);
+					resultText = await convertOCRMarkdownify(blob, context);
 				}
 
 				const modal = new ImageTextModal(this.app, {

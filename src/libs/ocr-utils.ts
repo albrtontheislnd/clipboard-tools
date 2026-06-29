@@ -38,8 +38,8 @@ export function handleOCRResponse(response: OCRResponse): string {
 /**
  * Upload optimized image to OCR endpoint.
  */
-export async function uploadToOCREndpoint(blob: Blob, context: OCRPluginContext): Promise<OCRResponse> {
-	const endpointUrl = `${context.settings.apiServer}/images/ocr`;
+export async function uploadToOCRMarkdownify(blob: Blob, context: OCRPluginContext): Promise<OCRResponse> {
+	const endpointUrl = `${context.settings.apiServer}/images/ocr-markdownify`;
 
 	const formData = new FormData();
 	formData.append('image', blob, 'image.webp');
@@ -54,8 +54,8 @@ export async function uploadToOCREndpoint(blob: Blob, context: OCRPluginContext)
 	return response.data;
 }
 
-export async function uploadToOCRVisionEndpoint(blob: Blob, context: OCRPluginContext): Promise<OCRResponse> {
-	const endpointUrl = `${context.settings.apiServer}/images/ocr-vision`;
+export async function uploadToOCRAI(blob: Blob, context: OCRPluginContext): Promise<OCRResponse> {
+	const endpointUrl = `${context.settings.apiServer}/images/ocr-ai`;
 
 	const formData = new FormData();
 	formData.append('image', blob, 'image.png');
@@ -70,8 +70,24 @@ export async function uploadToOCRVisionEndpoint(blob: Blob, context: OCRPluginCo
 	return response.data;
 }
 
-export async function uploadToOCRQuickEndpoint(blob: Blob, context: OCRPluginContext): Promise<OCRResponse> {
-	const endpointUrl = `${context.settings.apiServer}/images/ocr-quick`;
+export async function uploadToOCRNative(blob: Blob, context: OCRPluginContext): Promise<OCRResponse> {
+	const endpointUrl = `${context.settings.apiServer}/images/ocr-native`;
+
+	const formData = new FormData();
+	formData.append('image', blob, 'image.png');
+
+	const response = await axios.post(endpointUrl, formData, {
+		headers: {
+			'Content-Type': 'multipart/form-data',
+		},
+		responseType: 'json',
+	});
+
+	return response.data;
+}
+
+export async function uploadToOCRCompanion(blob: Blob, context: OCRPluginContext): Promise<OCRResponse> {
+	const endpointUrl = `${context.settings.apiServer}/images/ocr-companion`;
 
 	const formData = new FormData();
 	formData.append('image', blob, 'image.png');
@@ -138,13 +154,13 @@ export async function optimizeImageToWebP(blob: Blob): Promise<Blob> {
 /**
  * Convert image to markdown text using OCR.
  */
-export async function convertImageToMarkdown(blob: Blob, context: OCRPluginContext): Promise<string> {
+export async function convertOCRMarkdownify(blob: Blob, context: OCRPluginContext): Promise<string> {
 	try {
 		// Optimize image to WEBP with size constraints
 		const optimizedBlob = await optimizeImageToWebP(blob);
 
 		// Upload to OCR endpoint
-		const response = await uploadToOCREndpoint(optimizedBlob, context);
+		const response = await uploadToOCRMarkdownify(optimizedBlob, context);
 
 		// Handle response and return text
 		return handleOCRResponse(response);
@@ -156,10 +172,10 @@ export async function convertImageToMarkdown(blob: Blob, context: OCRPluginConte
 	}
 }
 
-export async function extractTextFromImage(blob: Blob, context: OCRPluginContext): Promise<string> {
+export async function convertOCRAI(blob: Blob, context: OCRPluginContext): Promise<string> {
 	try {
 		// Upload to OCR endpoint
-		const response = await uploadToOCRVisionEndpoint(blob, context);
+		const response = await uploadToOCRAI(blob, context);
 
 		// Handle response and return text
 		return handleOCRResponse(response);
@@ -171,10 +187,10 @@ export async function extractTextFromImage(blob: Blob, context: OCRPluginContext
 	}
 }
 
-export async function quickExtractTextFromImage(blob: Blob, context: OCRPluginContext): Promise<string> {
+export async function convertOCRNative(blob: Blob, context: OCRPluginContext): Promise<string> {
 	try {
 		// Upload to Quick OCR endpoint
-		const response = await uploadToOCRQuickEndpoint(blob, context);
+		const response = await uploadToOCRNative(blob, context);
 
 		// Handle response and return text
 		return handleOCRResponse(response);
@@ -182,6 +198,21 @@ export async function quickExtractTextFromImage(blob: Blob, context: OCRPluginCo
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 		console.error('Error in quickExtractTextFromImage:', error);
+		return `Error processing image: ${errorMessage}`;
+	}
+}
+
+export async function convertOCRCompanion(blob: Blob, context: OCRPluginContext): Promise<string> {
+	try {
+		// Upload to Quick OCR endpoint
+		const response = await uploadToOCRCompanion(blob, context);
+
+		// Handle response and return text
+		return handleOCRResponse(response);
+
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+		console.error('Error in convertOCRCompanion:', error);
 		return `Error processing image: ${errorMessage}`;
 	}
 }
