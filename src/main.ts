@@ -393,6 +393,9 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 					resultText = await convertOCRMarkdownify(blob, context);
 				}
 
+				// fix faulty LLM text
+				resultText = tUtils.normalizeMathDelimiters(resultText);
+
 				const modal = new ImageTextModal(this.app, {
 					imageSrc: blob,
 					resultText: resultText,
@@ -445,7 +448,14 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			const requestBody = {
 				prompt: "Summarize the provided Markdown text into concise, key bullet points. Focus on capturing the main ideas, key steps, or critical information. Aim for brevity, while retaining the essential meaning.",
 				providedText: selectedText,
-				system: "You are a helpful research assistant that provides clear, concise summaries of text content."
+				system: `You are a helpful research assistant that provides clear, concise summaries of text content.
+Output Markdown compatible with Obsidian.
+Rules:
+- Inline math MUST use $...$.
+- Display math MUST use $$...$$.
+- Never use \( ... \) or \[ ... \] to wrap LaTex math.
+- Never wrap non-mathematical text in math delimiters.
+`
 			};
 
 			const response = await axios.post(endpointUrl, requestBody, {

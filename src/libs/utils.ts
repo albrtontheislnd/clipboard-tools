@@ -170,4 +170,71 @@ export class tUtils {
 		}
 	}
 
+	/**
+	 * Converts:
+	 *   \( ... \)  ->  $...$
+	 *   \[ ... \]  ->  $$...$$
+	 *
+	 * while leaving code fences, inline code, and HTML comments untouched.
+	 */
+	static normalizeMathDelimiters(markdown: string): string {
+		const placeholders = new Map<string, string>();
+		let index = 0;
+
+		const protect = (text: string): string => {
+			const key = `\u0000MATH_PLACEHOLDER_${index++}\u0000`;
+			placeholders.set(key, text);
+			return key;
+		};
+
+		// ------------------------------------------------------------------
+		// Protect fenced code blocks (``` or ~~~)
+		// ------------------------------------------------------------------
+		markdown = markdown.replace(
+			/^([ \t]{0,3})(`{3,}|~{3,})[^\n]*\n[\s\S]*?^\1\2[ \t]*$/gm,
+			protect
+		);
+
+		// ------------------------------------------------------------------
+		// Protect inline code (`...`, ``...``, etc.)
+		// ------------------------------------------------------------------
+		markdown = markdown.replace(
+			/(`+)([\s\S]*?[^`])\1/g,
+			protect
+		);
+
+		// ------------------------------------------------------------------
+		// Protect HTML comments
+		// ------------------------------------------------------------------
+		markdown = markdown.replace(
+			/<!--[\s\S]*?-->/g,
+			protect
+		);
+
+		// ------------------------------------------------------------------
+		// Convert display math
+		// ------------------------------------------------------------------
+		markdown = markdown.replace(
+			/\\\[\s*([\s\S]*?)\s*\\\]/g,
+			(_, math: string) => `$$\n${math.trim()}\n$$`
+		);
+
+		// ------------------------------------------------------------------
+		// Convert inline math
+		// ------------------------------------------------------------------
+		markdown = markdown.replace(
+			/\\\(\s*([\s\S]*?)\s*\\\)/g,
+			(_, math: string) => `$${math.trim()}$`
+		);
+
+		// ------------------------------------------------------------------
+		// Restore protected regions
+		// ------------------------------------------------------------------
+		for (const [key, value] of placeholders) {
+			markdown = markdown.replace(key, value);
+		}
+
+		return markdown;
+	}
+
 }
