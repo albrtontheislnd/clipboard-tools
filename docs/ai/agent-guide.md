@@ -209,7 +209,7 @@ Used by: `handleClipboardImage`, `handleOCR`.
 
 ```typescript
 // Before
-static localPathToPartialUrl(localFilePath: string): string
+static localPathToPartialUrl(localFilePath: string, defName: string = 'uploads'): string
 
 // After
 static localPathToPartialUrl(localFilePath: string, defName: string = 'uploads'): string

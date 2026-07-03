@@ -1,7 +1,11 @@
-# LaTeX Modal Efficiency Improvements
+# Efficiency Improvements and Performance Analysis
 
 ## Overview
-This document outlines the efficiency improvements made to `latex_modal.ts` and `LatexModal.vue` to address performance issues and prevent memory leaks.
+This document outlines efficiency improvements made to the Alapaki Tools plugin, covering both specific component optimizations (like the LaTeX modal) and broader performance analysis covering image processing, OCR operations, text tools, and architectural considerations.
+
+---
+
+# LaTeX Modal Efficiency Improvements
 
 ## Files Modified
 
@@ -83,7 +87,7 @@ const sidebarCategories: SidebarCategory[] = (() => {
     for (const [category, icons] of Object.entries(latexSidebarCategoryIcons)) {
         categories.push({ label: String(icons), category: category });
     }
-    
+
     categories.unshift({ label: 'All', category: 'All' });
     
     return categories;
@@ -127,7 +131,7 @@ watch(searchQuery, (newQuery) => {
     if (searchTimeout) {
         clearTimeout(searchTimeout);
     }
-    
+
     searchTimeout = setTimeout(() => {
         debouncedSearchQuery.value = newQuery;
     }, 150); // 150ms debounce
@@ -139,19 +143,19 @@ watch(searchQuery, (newQuery) => {
 const filteredSymbols = computed(() => {
     const category = selectedCategory.value;
     const query = debouncedSearchQuery.value.trim().toLowerCase();
-    
+
     // Get symbols for the selected category (or all symbols)
     let filtered = category === 'All' 
         ? allSymbols 
         : symbolsByCategory[category] || [];
-    
+
     // Apply search filter if query exists
     if (query) {
         filtered = filtered.filter(s => 
             s.latex.toLowerCase().includes(query)
         );
     }
-    
+
     return filtered;
 });
 ```
@@ -175,7 +179,7 @@ const insertAccumulatedText = (insertType: 'inline' | 'block' | 'plain' = 'inlin
 };
 ```
 
-## Performance Improvements
+## Performance Improvements (LaTeX Modal)
 
 ### 1. **Search Performance**
 - **Before**: Filter operations triggered on every keystroke (422 symbols × number of keystrokes)
@@ -202,33 +206,273 @@ const insertAccumulatedText = (insertType: 'inline' | 'block' | 'plain' = 'inlin
 - **After**: Try-catch with proper cleanup on mount failures
 - **Impact**: More robust error handling, prevents app crashes
 
-## Testing Recommendations
+---
 
-1. **Memory Leak Testing**:
-   - Open and close the modal multiple times
-   - Monitor memory usage in browser DevTools
-   - Verify cleanup occurs on all close scenarios
+# Comprehensive Performance Analysis
 
-2. **Performance Testing**:
-   - Type rapidly in search input
-   - Verify debouncing works (150ms delay)
-   - Check CPU usage remains low
+## Image Processing & OCR Operations
 
-3. **Functional Testing**:
-   - Test all category filters
-   - Test search functionality
-   - Test symbol insertion (inline, block, plain)
-   - Test empty text validation
+### Key Findings:
+1. **Main Thread Blocking**: Image conversion, OCR preprocessing, and blob operations run on the main thread, causing UI freezes
+2. **Ineffective Locking System**: Global `this.locked` prevents concurrent operations unnecessarily
+3. **Suboptimal Image Handling**: Multiple blob conversions and unnecessary memory allocations
+4. **Lack of Progress Feedback**: No incremental feedback during long operations
 
-## Summary
+### Critical Issues Identified:
+- **`normalizeMathDelimiters` function**: Uses 5-6 separate regex passes on text, inefficient for large OCR outputs
+- **Clipboard reading**: Extracts blobs for all clipboard items even when only images are needed
+- **Image conversion**: Uses canvas API on main thread for WebP/JPEG/PNG conversion
+- **Modal operations**: All modals block UI during async operations despite loading indicators
 
-These improvements address the key efficiency issues identified in the original implementation:
+## Text Tools & Vue Components
 
-1. **Fixed memory leaks** through proper cleanup
-2. **Added debouncing** to reduce unnecessary operations
-3. **Optimized reactivity** by using plain constants for static data
-4. **Improved filtering** with pre-grouped symbols
-5. **Added error handling** for robustness
-6. **Added cleanup** on component unmount
+### Observations:
+1. **ChangeCaseModal**: Efficient client-side operations but could benefit from virtualization for large texts
+2. **Wrap Callout**: Simple operation but could use more efficient string manipulation
+3. **Vue reactivity**: Some components create unnecessary watchers for static data
+4. **Event listeners**: Proper cleanup in most places, but could be more systematic
 
-The changes provide significant performance improvements while maintaining the same functionality and user experience.
+## Architecture & Dependencies
+
+### Strengths:
+- Clear separation of concerns (libs, modals, components)
+- Good use of static utility classes (`tUtils`)
+- Proper Obsidian plugin patterns followed
+- Effective use of Promises for async operations
+
+### Areas for Improvement:
+1. **Tight coupling in main.ts**: Complex branching logic in `convertWrapper()` 
+2. **Modal lifecycle management**: Inconsistent cleanup patterns across modals
+3. **Error handling**: Some async operations lack proper error boundaries
+4. **State management**: Ad-hoc state tracking rather than centralized store
+
+## Specific Recommendations
+
+### A. Immediate Wins (High Impact, Low Effort)
+
+#### 1. Optimize `normalizeMathDelimiters` (src/libs/utils.ts)
+Replace with single-pass regex:
+```typescript
+// Single pass with callback
+return markdown.replace(/(?:\\[\\]\\|\\)|\\([^\\]*)\\)/g, (match, p1) => {
+    if (match.startsWith('\\[') && match.endsWith('\\]')) {
+        return `$$${p1.trim()}$$`;
+    }
+    if (match.startsWith('\\(') && match.endsWith('\\)')) {
+        return `$${p1.trim()}$`;
+    }
+    return match; // Shouldn't happen with this regex
+});
+```
+
+#### 2. Improve Clipboard Reading Efficiency (src/main.ts)
+```typescript
+// Instead of reading all items upfront:
+const hasImage = await navigator.clipboard.read()
+    .then(items => items.some(item => 
+        item.types.some(type => type.startsWith('image/'))
+    ));
+
+// Extract only when needed:
+const imageItem = clipboardItems.find(item => 
+    item.types.includes("image/png")
+);
+if (!imageItem) return;
+const blob = await imageItem.getType("image/png");
+```
+
+#### 3. Add Vue Performance Optimizations
+```vue
+<!-- In ChangeCase.vue and similar components -->
+<template>
+    <div>
+        <h2 v-once>Change Case</h2> <!-- Static content -->
+        <div v-memo=[[computedValue]]> <!-- Only re-renders when needed -->
+            <!-- Content -->
+        </div>
+    </div>
+</template>
+```
+
+### B. Short-Term Improvements (Medium Effort, High Impact)
+
+#### 1. Web Worker Offloading for Image Operations
+Create `src/workers/imageWorker.js`:
+```javascript
+self.onmessage = async (e) => {
+    const { operation, data } = e.data;
+    let result;
+    
+    switch (operation) {
+        case 'convertImage':
+            result = await convertImageLocally(
+                new Blob([data.blob], { type: data.type }), 
+                data.format, 
+                data.quality
+            );
+            break;
+        case 'optimizeImage':
+            result = await optimizeImageToWebP(
+                new Blob([data.blob], { type: data.type }),
+                data.maxWidth,
+                data.maxHeight
+            );
+            break;
+    }
+    
+    self.postMessage({ 
+        id: data.id, 
+        result: await result.arrayBuffer() 
+    });
+};
+```
+
+Use in main.ts:
+```typescript
+// Convert to use worker
+const convertImageWithWorker = (blob, format, quality) => {
+    return new Promise((resolve, reject) => {
+        const worker = new Worker(new URL('./workers/imageWorker.js', import.meta.url));
+        const id = Math.random().toString(36).substr(2, 9);
+        
+        worker.onmessage = (e) => {
+            if (e.data.id === id) {
+                worker.terminate();
+                resolve(new Blob([e.data.result], { type: `image/${format}` }));
+            }
+        };
+        
+        worker.onerror = (e) => {
+            worker.terminate();
+            reject(e.error);
+        };
+        
+        worker.postMessage({
+            operation: 'convertImage',
+            id: id,
+            blob: [...new Uint8Array(await blob.arrayBuffer())],
+            type: blob.type,
+            format,
+            quality
+        });
+    });
+};
+```
+
+#### 2. Implement Granular Locking System
+Replace global lock in main.ts:
+```typescript
+private locks = new Map<string, boolean>();
+
+async withLock<T>(operation: string, fn: () => Promise<T>): Promise<T> {
+    if (this.locks.get(operation)) {
+        throw new Error(`${operation} already in progress`);
+    }
+    this.locks.set(operation, true);
+    try {
+        return await fn();
+    } finally {
+        this.locks.set(operation, false);
+    }
+}
+
+// Usage examples:
+await this.withLock('handleClipboardImage', () => this.processImage(blob));
+await this.withLock('handleOCR', () => this.runOCR(blob));
+await this.withLock('handleSummarize', () => this.summarizeText(text));
+```
+
+### C. Long-Term Architectural Improvements
+
+#### 1. Backend-Offload Strategy
+Move heavy operations to plugin's backend server:
+- Image format conversion (especially AVIF/WebP)
+- OCR preprocessing and post-processing
+- Complex image transformations
+- Keep only lightweight UI/text operations client-side
+
+#### 2. Intelligent Caching Layer
+Add to tUtils:
+```typescript
+static async getOrCompute<T>(key: string, factory: () => Promise<T>): Promise<T> {
+    const cached = sessionStorage.getItem(key);
+    if (cached) return JSON.parse(cached) as T;
+    
+    const result = await factory();
+    sessionStorage.setItem(key, JSON.stringify(result));
+    return result;
+}
+
+// Usage for expensive operations:
+const processedImage = await tUtils.getOrCompute(
+    `img-${blob.size}-${format}-${quality}`, 
+    () => this.convertImageWithWorker(blob, format, quality)
+);
+```
+
+#### 3. WebAssembly for Critical Paths
+Consider compiling image processing algorithms to Wasm:
+- PNG optimization/Oxipng
+- JPEG quantization
+- Color space conversions
+- Use existing Wasm image processing libraries
+
+#### 4. Performance Monitoring Integration
+Add to main.ts:
+```typescript
+private trackOperation(name: string, fn: () => Promise<any>) {
+    const start = performance.now();
+    return fn().finally(() => {
+        const duration = performance.now() - start;
+        console.log(`[Perf] ${name}: ${duration.toFixed(2)}ms`);
+        
+        // Alert on slow operations
+        if (duration > 500) { // 500ms threshold
+            new Notice(`Slow operation: ${name} (${duration.toFixed(0)}ms)`);
+            // Could send to analytics endpoint
+        }
+    });
+}
+
+// Usage:
+await this.trackOperation('handleClipboardImage', () => this.processImage(blob));
+await this.trackOperation('handleOCR', () => this.runOCR(blob));
+```
+
+## Priority Recommendations
+
+### Tier 1: Implement Immediately (1-2 days effort)
+1. [ ] Optimize `normalizeMathDelimiters` to single-pass regex
+2. [ ] Improve clipboard reading to avoid unnecessary blob extraction
+3. [ ] Add `v-once` and `v-memo` to Vue components where appropriate
+4. [ ] Implement granular locking system to allow concurrent operations
+
+### Tier 2: Implement Within Sprint (3-5 days effort)
+1. [ ] Offload image conversion to Web Workers
+2. [ ] Add basic performance monitoring for key operations
+3. [ ] Implement intelligent caching for repeated operations
+4. [ ] Standardize modal cleanup patterns across all modals
+
+### Tier 3: Strategic Improvements (Future releases)
+1. [ ] Backend-offload for image transformations
+2. [ ] WebAssembly integration for critical image algorithms
+3. [ ] Progressive image loading for large OCR inputs
+4. [ ] Comprehensive performance analytics dashboard
+
+## Expected Impact
+Implementation of these recommendations should:
+- Reduce main-thread blocking during image operations by 70-90%
+- Decrease UI latency from >500ms to <50ms for most operations
+- Enable truly concurrent operations (OCR + text summarization + image conversion)
+- Improve scalability for large documents and high-resolution images
+- Provide better user feedback during long-running operations
+- Reduce memory churn and garbage collection pressure
+
+## Testing & Validation
+1. **Performance Benchmarks**: Measure operation times before/after changes
+2. **Memory Profiling**: Use Chrome DevTools to verify reduced memory churn
+3. **UI Responsiveness**: Test with Chrome Performance tab to ensure <16ms frame times
+4. **Real-world Testing**: Validate with typical Obsidian workflows (note taking, image pasting, OCR)
+5. **Regression Testing**: Ensure all existing functionality remains intact
+
+These improvements will transform the plugin from one that occasionally blocks the UI during operations to a consistently responsive tool that handles complex image and text operations smoothly in the background.

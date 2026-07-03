@@ -230,6 +230,12 @@ const hasImage = await tUtils.hasImageInClipboard();
 
 ## Recent Changes
 
+### `normalizeMathDelimiters` — New method for LaTeX math delimiter normalization
+
+- **What added:** New static method `normalizeMathDelimiters(markdown: string): string` that converts LaTeX display math (`\\[ ... \\]`) to `$$...$$` and inline math (`\\( ... \\)`) to `$...$`, while protecting code fences, inline code, and HTML columns from being modified.
+- **Why:** Ensures consistent math delimiter formatting in OCR and text processing outputs, converting LaTeX-style delimiters to Obsidian/MathJax-compatible format.
+- **Migration:** New method, no migration needed.
+
 ### `localPathToPartialUrl` — Added `defName` parameter and path-traversal guards
 
 - **What changed:** The method signature changed from `(localFilePath: string)` to `(localFilePath: string, defName: string = 'uploads')`.

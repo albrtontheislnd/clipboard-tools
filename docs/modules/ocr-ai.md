@@ -72,6 +72,7 @@ selected text or clipboard content
   - Displays the OCR result (markdown or plain text).
   - Provides a toggle (`setContent`) to choose whether to embed the original image.
   - On confirmation, calls `insertContent()` to write into the note.
+  - **Applies math delimiter normalization**: Before display, OCR results are processed through `tUtils.normalizeMathDelimiters()` to convert LaTeX-style math delimiters (`\\( ... \\)` and `\\[ ... \\]`) to Obsidian/MathJax-compatible format (`$...$` and `$$...$$`), while protecting code fences, inline code, and HTML comments from being modified.
 - `LoadingModal` is shown during any API round-trip.
 
 ## Key Files

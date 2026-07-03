@@ -42,6 +42,8 @@ static
 main.js
 styles.css
 data.json
+.kilo
+.vscode
 
 # Exclude sourcemaps
 *.map
