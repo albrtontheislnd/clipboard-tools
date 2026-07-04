@@ -240,8 +240,8 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 
 			switch (scenario) {
 				case 'native_local': {
-					// Use native Web Browser API for local conversion
-					const convertedBlob = await tUtils.convertImageLocally(blob, imageFormat, this.settings?.compressionLevel || defaultCompressionLevel);
+					// Use web worker with OffscreenCanvas for local conversion
+					const convertedBlob = await tUtils.convertImageInWorker(blob, imageFormat, this.settings?.compressionLevel || defaultCompressionLevel);
 					if (!convertedBlob) {
 						new Notice('Failed to convert image locally');
 						return null;
@@ -259,8 +259,8 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 				}
 
 				case 'native_s3': {
-					// Convert locally first, then upload to S3
-					const convertedBlob = await tUtils.convertImageLocally(blob, imageFormat, this.settings?.compressionLevel || defaultCompressionLevel);
+					// Convert in web worker first, then upload to S3
+					const convertedBlob = await tUtils.convertImageInWorker(blob, imageFormat, this.settings?.compressionLevel || defaultCompressionLevel);
 					if (!convertedBlob) {
 						new Notice('Failed to convert image locally for S3 upload');
 						return null;

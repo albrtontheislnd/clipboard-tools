@@ -1,7 +1,7 @@
 import { Editor, Notice } from 'obsidian';
 import axios from 'axios';
 import { stringOrEmptySchema } from './plugin_interfaces';
-import { tUtils } from './utils';
+import { runImageWorker, tUtils } from './utils';
 
 interface OCRResponse {
 	success: boolean;
@@ -103,52 +103,18 @@ export async function uploadToOCRCompanion(blob: Blob, context: OCRPluginContext
 }
 
 /**
- * Optimize image to WEBP format with size constraints (max 1024x1024).
+ * Optimize image to WEBP format using a Web Worker with OffscreenCanvas.
+ * Falls back to `optimizeImageToWebP()` on the main thread if the worker fails.
  */
-export async function optimizeImageToWebP(blob: Blob): Promise<Blob> {
-	return new Promise((resolve, reject) => {
-		const img = new Image();
-		const canvas = document.createElement('canvas');
-		const ctx = canvas.getContext('2d');
-
-		img.onload = () => {
-			try {
-				// Calculate dimensions keeping aspect ratio, max 1024x1024
-				let { width, height } = img;
-
-				if (width > 1024 || height > 1024) {
-					const aspectRatio = width / height;
-					if (width > height) {
-						width = 1024;
-						height = Math.floor(1024 / aspectRatio);
-					} else {
-						height = 1024;
-						width = Math.floor(1024 * aspectRatio);
-					}
-				}
-
-				// Set canvas size (ensure integer values)
-				canvas.width = Math.floor(width);
-				canvas.height = Math.floor(height);
-
-				// Draw and convert to WEBP
-				ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-				canvas.toBlob((webpBlob) => {
-					if (webpBlob) {
-						resolve(webpBlob);
-					} else {
-						reject(new Error('Failed to convert image to WEBP'));
-					}
-				}, 'image/webp', 0.8); // 80% quality
-			} catch (error) {
-				reject(error);
-			}
-		};
-
-		img.onerror = () => reject(new Error('Failed to load image'));
-		img.src = URL.createObjectURL(blob);
-	});
+export async function optimizeImageToWebPInWorker(blob: Blob): Promise<Blob> {
+	const buffer = await blob.arrayBuffer();
+	const result = await runImageWorker(
+		{ operation: 'optimizeImage', buffer, type: blob.type, maxWidth: 1024, maxHeight: 1024 },
+		'image/webp',
+		() => tUtils.optimizeImageToWebP(blob)
+	);
+	if (!result) throw new Error('Image optimization failed');
+	return result;
 }
 
 /**
@@ -156,8 +122,8 @@ export async function optimizeImageToWebP(blob: Blob): Promise<Blob> {
  */
 export async function convertOCRMarkdownify(blob: Blob, context: OCRPluginContext): Promise<string> {
 	try {
-		// Optimize image to WEBP with size constraints
-		const optimizedBlob = await optimizeImageToWebP(blob);
+		// Optimize image to WEBP with size constraints (using web worker)
+		const optimizedBlob = await optimizeImageToWebPInWorker(blob);
 
 		// Upload to OCR endpoint
 		const response = await uploadToOCRMarkdownify(optimizedBlob, context);

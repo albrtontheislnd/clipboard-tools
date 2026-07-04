@@ -3,6 +3,60 @@ export interface FilePathInfo {
   fileUri: string;
 }
 
+type WorkerMessageInput =
+	| { operation: 'convertImage'; buffer: ArrayBuffer; type: string; format: string; quality: number }
+	| { operation: 'optimizeImage'; buffer: ArrayBuffer; type: string; maxWidth: number; maxHeight: number };
+
+/**
+ * Shared worker lifecycle helper — spin up an inline worker, post a message,
+ * resolve/reject the returned Blob, and fall back to a main-thread function on error.
+ */
+export async function runImageWorker(
+	message: WorkerMessageInput,
+	outputType: string,
+	fallback: () => Promise<Blob | null>
+): Promise<Blob | null> {
+	try {
+		console.log('Running image operation in web worker');
+		const WorkerCtor = (await import('../workers/imageWorker.ts?worker&inline')).default;
+		const worker = new WorkerCtor();
+		const id = Math.random().toString(36).slice(2, 9);
+		// buffer is transferred, not copied
+		const buffer = message.buffer;
+
+		return new Promise((resolve, reject) => {
+			worker.onmessage = (e: MessageEvent<{ id: string; buffer?: ArrayBuffer; error?: string }>) => {
+				worker.terminate();
+				if (e.data.id === id) {
+					if (e.data.error) {
+						reject(new Error(e.data.error));
+					} else if (e.data.buffer) {
+						resolve(new Blob([e.data.buffer], { type: outputType }));
+					} else {
+						reject(new Error('Worker returned no data'));
+					}
+				}
+			};
+			worker.onerror = () => {
+				worker.terminate();
+				reject(new Error('Web Worker failed'));
+			};
+
+			worker.postMessage({ ...message, id }, [buffer]);
+		});
+	} catch (error) {
+		console.warn('Worker failed, falling back to main thread:', error);
+		return fallback();
+	}
+}
+
+interface ImageConvertOptions {
+	format: string;
+	quality: number;
+	maxWidth?: number;
+	maxHeight?: number;
+}
+
 export class tUtils {
 
 
@@ -94,57 +148,89 @@ export class tUtils {
 	}
 
 	/**
-	 * Converts an image blob to the specified format using native Web Browser API
-	 * @param blob - The source image blob
-	 * @param format - Target format (webp, jpeg, png)
-	 * @param quality - Compression quality (1-100)
-	 * @returns Promise resolving to converted Blob or null on error
+	 * Generalized main-thread image conversion using native Canvas API.
+	 * Optionally resizes to fit within maxWidth/maxHeight while preserving aspect ratio.
 	 */
-	static async convertImageLocally(blob: Blob, format: string, quality: number): Promise<Blob | null> {
+	static async convertImageOnMainThread(blob: Blob, options: ImageConvertOptions): Promise<Blob | null> {
 		try {
-			// Create an image element to load the blob
 			const img = new Image();
 			const url = URL.createObjectURL(blob);
-			
-			await new Promise((resolve, reject) => {
-				img.onload = resolve;
+
+			await new Promise<void>((resolve, reject) => {
+				img.onload = () => resolve();
 				img.onerror = reject;
 				img.src = url;
 			});
 
-			// Create canvas and draw the image
+			let w = img.width;
+			let h = img.height;
+
+			// Optional resize
+			if (options.maxWidth && options.maxHeight) {
+				if (w > options.maxWidth || h > options.maxHeight) {
+					const ratio = w / h;
+					if (w > h) {
+						w = options.maxWidth;
+						h = Math.floor(options.maxWidth / ratio);
+					} else {
+						h = options.maxHeight;
+						w = Math.floor(options.maxHeight * ratio);
+					}
+				}
+			}
+
 			const canvas = document.createElement('canvas');
-			canvas.width = img.width;
-			canvas.height = img.height;
+			canvas.width = Math.floor(w);
+			canvas.height = Math.floor(h);
 			const ctx = canvas.getContext('2d');
-			
+
 			if (!ctx) {
 				URL.revokeObjectURL(url);
 				return null;
 			}
 
-			ctx.drawImage(img, 0, 0);
+			ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-			// Convert to target format
-			const mimeType = format === 'jpeg' ? 'image/jpeg' : `image/${format}`;
-			const qualityValue = Math.max(0.01, Math.min(1, quality / 100));
+			const mimeType = options.format === 'jpeg' ? 'image/jpeg' : `image/${options.format}`;
+			const qualityValue = Math.max(0.01, Math.min(1, options.quality / 100));
 
-			const convertedBlob = await new Promise<Blob | null>((resolve) => {
-				canvas.toBlob(
-					(blob) => resolve(blob),
-					mimeType,
-					qualityValue
-				);
+			const result = await new Promise<Blob | null>((resolve) => {
+				canvas.toBlob((b) => resolve(b), mimeType, qualityValue);
 			});
 
-			// Clean up
 			URL.revokeObjectURL(url);
-
-			return convertedBlob;
+			return result;
 		} catch (error) {
-			console.error('Error in local image conversion:', error);
+			console.error('Error in image conversion:', error);
 			return null;
 		}
+	}
+
+	/**
+	 * Converts an image blob to the specified format using native Web Browser API.
+	 */
+	static async convertImageLocally(blob: Blob, format: string, quality: number): Promise<Blob | null> {
+		return tUtils.convertImageOnMainThread(blob, { format, quality });
+	}
+
+	/**
+	 * Optimize image to WEBP format with size constraints (max 1024x1024).
+	 */
+	static async optimizeImageToWebP(blob: Blob): Promise<Blob | null> {
+		return tUtils.convertImageOnMainThread(blob, { format: 'webp', quality: 80, maxWidth: 1024, maxHeight: 1024 });
+	}
+
+	/**
+	 * Converts an image blob to the specified format using a Web Worker with OffscreenCanvas.
+	 * Falls back to `convertImageLocally()` on the main thread if the worker fails.
+	 */
+	static async convertImageInWorker(blob: Blob, format: string, quality: number): Promise<Blob | null> {
+		const buffer = await blob.arrayBuffer();
+		return runImageWorker(
+			{ operation: 'convertImage' as const, buffer, type: blob.type, format, quality },
+			`image/${format}`,
+			() => tUtils.convertImageLocally(blob, format, quality)
+		);
 	}
 
 	/**
