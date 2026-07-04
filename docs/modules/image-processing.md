@@ -34,7 +34,7 @@ handleClipboardImage(blob)
 | Factor | Local (canvas) | Server (API) |
 |---|---|---|
 | **AVIF format** | Not supported | Required |
-| **Native format** (WEBP, JPEG, PNG) | Default | Only if S3 is enabled **and** settings force server path |
+| **Native format** (WEBP, JPEG, PNG) | Default (uses web worker with fallback to main thread) | Only if S3 is enabled **and** settings force server path |
 | **Settings toggle** | — | `settings.useApiForConversion` |
 
 ### Save Destination Decision

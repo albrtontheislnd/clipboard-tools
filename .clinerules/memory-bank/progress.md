@@ -84,6 +84,8 @@
 
 The plugin is functionally complete for its current feature set. The recent documentation effort (this session) created both developer docs (`docs/`) and a memory bank (`docs/.clinerules/memory-bank/`) to serve future development.
 
+**Recent Achievement**: Completed code refactoring to eliminate duplication in image conversion functions by extracting a shared `convertImageOnMainThread()` helper, reducing code duplication by ~49% and ensuring consistent return types across functions.
+
 ## Known Issues
 
 | Issue | Severity | Status |
