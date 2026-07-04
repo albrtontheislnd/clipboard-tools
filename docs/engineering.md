@@ -81,6 +81,8 @@ import { createApp } from 'vue';
 // Internal — use path alias
 import { tUtils } from './libs/utils';
 import { ImageTextModal } from './modals/aiprompt_modal';
+import { InsertLocalFileModal } from './modals/localfile_modal';
+import { AddLocalFile } from './components/AddLocalFile.vue';
 ```
 
 ### TypeScript

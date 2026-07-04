@@ -40,3 +40,23 @@ Alapaki Tools is an Obsidian community plugin that provides a suite of editor ut
 - AVIF conversion requires an external API server — no native browser support.
 - S3 uploads require a backend API server — no AWS SDK in the plugin.
 - Single global async lock (`this.locked`) gates all operations.
+
+## Key Constraints
+
+- All code runs in Obsidian's Electron browser context.
+- `navigator.clipboard.read()` requires user interaction (transient activation) and only `image/png` MIME type is handled.
+- AVIF conversion requires an external API server — no native browser support.
+- S3 uploads require a backend API server — no AWS SDK in the plugin.
+- Single global async lock (`this.locked`) gates all operations.
+
+## Evolution of Project Decisions
+
+| Decision | Date | Context |
+|---|---|---|
+| API server delegation for heavy processing | Initial | Browser limitations make AVIF/S3/OCR impossible in-plugin |
+| Vue 3 for modal UIs | Initial | Complex UIs need reactive framework |
+| Single global lock | Initial | Simple, prevents clipboard state corruption |
+| Regex-based callout parsing | Initial | Leverages standard Obsidian callout syntax |
+| `localPathToPartialUrl` safety guard | This session | Added `defName` + path-traversal checks after S3 injection concern |
+| Full `docs/` documentation | This session | No developer docs existed — needed for maintenance and AI agent onboarding |
+| Memory Bank initialization | This session | Needed for agent session continuity across resets |

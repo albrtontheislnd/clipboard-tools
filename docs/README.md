@@ -74,22 +74,23 @@ Alapaki Tools is a multi-feature Obsidian plugin that provides image optimizatio
 
 ## Documentation Map
 
-| Document | Audience | Covers |
-|---|---|---|
-| `README.md` (this) | All | Project overview, architecture, index |
-| [architecture.md](architecture.md) | Developers | System design, data flow, module boundaries |
-| [modules/image-processing.md](modules/image-processing.md) | Developers | Image optimization pipeline, local/S3/server flows |
-| [modules/ocr-ai.md](modules/ocr-ai.md) | Developers | OCR, image-to-markdown, text extraction |
-| [modules/latex.md](modules/latex.md) | Developers | LaTeX autocomplete, symbol insertion |
-| [modules/chinese-tools.md](modules/chinese-tools.md) | Developers | Zhongwen grammar/usage/explain system |
-| [modules/prompt-callouts.md](modules/prompt-callouts.md) | Developers | LLM prompt callout system |
-| [modules/text-tools.md](modules/text-tools.md) | Developers | Change case, wrap callout |
-| [modules/dictionary.md](modules/dictionary.md) | Developers | Dictionary sidebar (Vue 3 + API) |
-| [reference/utils.md](reference/utils.md) | Developers | tUtils API reference |
-| [reference/commands.md](reference/commands.md) | Developers | All commands, menus, context items |
-| [reference/config.md](reference/config.md) | Developers | Settings schema and defaults |
-| [ai/agent-guide.md](ai/agent-guide.md) | AI Agents | Extension patterns, conventions, risks |
-| [engineering.md](engineering.md) | Developers | Build, lint, project structure, conventions |
+|| Document | Audience | Covers |
+||---|---|---|
+|| `README.md` (this) | All | Project overview, architecture, index |
+|| [architecture.md](architecture.md) | Developers | System design, data flow, module boundaries |
+|| [modules/image-processing.md](modules/image-processing.md) | Developers | Image optimization pipeline, local/S3/server flows |
+|| [modules/ocr-ai.md](modules/ocr-ai.md) | Developers | OCR, image-to-markdown, text extraction |
+|| [modules/latex.md](modules/latex.md) | Developers | LaTeX autocomplete, symbol insertion |
+|| [modules/chinese-tools.md](modules/chinese-tools.md) | Developers | Zhongwen grammar/usage/explain system |
+|| [modules/prompt-callouts.md](modules/prompt-callouts.md) | Developers | LLM prompt callout system |
+|| [modules/text-tools.md](modules/text-tools.md) | Developers | Change case, wrap callout |
+|| [modules/local-file.md](modules/local-file.md) | Developers | Local file insertion (Markdown links to local files) |
+|| [modules/dictionary.md](modules/dictionary.md) | Developers | Dictionary sidebar (Vue 3 + API) |
+|| [reference/utils.md](reference/utils.md) | Developers | tUtils API reference |
+|| [reference/commands.md](reference/commands.md) | Developers | All commands, menus, context items |
+|| [reference/config.md](reference/config.md) | Developers | Settings schema and defaults |
+|| [ai/agent-guide.md](ai/agent-guide.md) | AI Agents | Extension patterns, conventions, risks |
+|| [engineering.md](engineering.md) | Developers | Build, lint, project structure, conventions |
 
 ---
 

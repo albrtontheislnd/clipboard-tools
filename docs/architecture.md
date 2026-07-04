@@ -35,6 +35,7 @@ src/
 │   ├── aiprompt_modal.ts   # Image-to-Markdown result modal
 │   ├── latex_modal.ts      # LaTeX symbol browser/inserter
 │   ├── changecase_modal.ts # Text case converter
+│   ├── localfile_modal.ts  # Local file insertion modal
 │   └── loading_modal.ts    # Generic loading spinner modal
 ├── latex_symbols/          # LaTeX symbol definition files by category
 │   ├── latexAll.ts, interfaces.ts, arrowSymbols.ts, greekHebrewSymbols.ts,
