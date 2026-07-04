@@ -83,7 +83,9 @@ export class InsertLatexModal extends Modal {
                     },
                     values: this.inputValue,
                 });
-                this.vueApp.mount(this.containerEl.children[1]);
+                const container = this.containerEl.children[1];
+                if (!container) throw new Error('Container not found');
+                this.vueApp.mount(container);
             } catch (error) {
                 console.error('Failed to mount Vue app:', error);
                 this.cleanup();

@@ -1,28 +1,24 @@
 import { App, Modal } from 'obsidian';
 import { createApp } from 'vue';
 import { App as vueApp } from 'vue';
-import  ImageToMarkdown  from '../components/ImageToMarkdown.vue';
+import AddLocalFile from '../components/AddLocalFile.vue';
 
-export type callbackValue = { includeImage: boolean, textContent: string } | null;
-export type ImageTextModalInputArgs = {
-	imageSrc: Blob,
-	resultText: string,
+export type callbackValue = { textContent: string } | null;
+export type LocalFileInputArgs = {
+	paths: string,
+	keepExtension: boolean,
 };
 
-export class ImageTextModal extends Modal {
+export class InsertLocalFileModal extends Modal {
 	private vueApp: vueApp<Element> | null = null;
-	private returnValue: callbackValue  = null;
-	private inputValue: ImageTextModalInputArgs;
+	private returnValue: callbackValue = null;
+	private inputValue: LocalFileInputArgs;
 	private closeHandler: (() => void) | null = null;
 
-	/**
-	 * Constructor for the ImageTextModal class.
-	 * @param app - The Obsidian app instance.
-	 * @param args - The input arguments containing the image source and the result text.
-	 */
-	constructor(app: App, args: ImageTextModalInputArgs) {
+	constructor(app: App, args: LocalFileInputArgs) {
 		super(app);
 		this.inputValue = args;
+		this.setTitle('Insert file paths');
 	}
 
 	/**
@@ -71,7 +67,7 @@ export class ImageTextModal extends Modal {
 	private openModal(): void {
 		if (!this.vueApp) {
 			try {
-				this.vueApp = createApp(ImageToMarkdown, {
+				this.vueApp = createApp(AddLocalFile, {
 					close: this.close.bind(this),
 					insertData: (data: callbackValue) => {
 						this.returnValue = data;
@@ -79,10 +75,9 @@ export class ImageTextModal extends Modal {
 					},
 					values: this.inputValue,
 				});
-
-				const container = this.containerEl.children[1];
-				if (!container) throw new Error('Container not found');
-				this.vueApp.mount(container);
+                const container = this.containerEl.children[1];
+                if (!container) throw new Error('Container not found');
+                this.vueApp.mount(container);
 			} catch (error) {
 				console.error('Failed to mount Vue app:', error);
 				this.cleanup();

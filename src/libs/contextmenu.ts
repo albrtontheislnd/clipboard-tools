@@ -9,7 +9,8 @@ export function registerContextMenu(
     handleChangeCase: (editor: Editor) => Promise<void>,
     handleZhongwen: (editor: Editor, tasks: 'grammar' | 'word-usage-en' | 'word-usage-vi' | 'explain') => Promise<void>,
     handlePromptCallouts: () => Promise<void>,
-    handleLatexModal: (editor: Editor) => Promise<void>
+    handleLatexModal: (editor: Editor) => Promise<void>,
+    handleLocalFileModal: (editor: Editor) => Promise<void>
 ) {
     // Add a main menu item with submenu
     let subMenu: Menu;
@@ -40,6 +41,14 @@ export function registerContextMenu(
             subItem.setTitle("Latex Symbols").setIcon('clipboard-pen-line')
                 .onClick(async () => {
                     await handleLatexModal(editor);
+                });
+        });
+
+        // Insert file paths
+        subMenu.addItem((subItem: MenuItem) => {
+            subItem.setTitle("Insert file paths").setIcon('link')
+                .onClick(async () => {
+                    await handleLocalFileModal(editor);
                 });
         });
 

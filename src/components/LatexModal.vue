@@ -40,6 +40,7 @@
       <button
         v-for="action in sidebarCategories"
         :key="action.category"
+        v-once
         @click="handleAction(action.category)"
         :class="[
           'sidebar-button',

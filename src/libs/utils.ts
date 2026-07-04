@@ -1,3 +1,8 @@
+export interface FilePathInfo {
+  filename: string;
+  fileUri: string;
+}
+
 export class tUtils {
 
 
@@ -157,8 +162,8 @@ export class tUtils {
 			// Read clipboard contents
 			const clipboardItems = await navigator.clipboard.read();
 
-			// Use some to check if any of the types are image types
-			return clipboardItems.some(item => item.types.some(type => type.startsWith('image/')));
+			// Use some to check if any of the types are image/png
+			return clipboardItems.some(item => item.types.includes("image/png"));
 		} catch (error: unknown) {
 			// Handle permission denied or other errors
 			if (error instanceof Error && error.name === 'NotAllowedError') {
@@ -168,6 +173,95 @@ export class tUtils {
 			}
 			return false;
 		}
+	}
+
+	/**
+	 * Takes an absolute local file path (OS-agnostic), extracts the filename 
+	 * without extension (with URL unescaping), and generates a standard file URI.
+	 *
+	 * @param absolutePath The OS-agnostic absolute file path (e.g., /path/to/file.txt or C:\path\to\file.txt)
+	 * @returns An object containing the extracted filename and the generated file URI.
+	 */
+	static processFilePath(absolutePath: string): FilePathInfo {
+		// Strip matching single or double quotes from the path
+		absolutePath = absolutePath.replace(/^['"]|['"]$/g, '');
+
+		// ====================================================================
+		// 1. Extract filename without extension (OS-agnostic)
+		// ====================================================================
+		
+		// Split path by either forward slash or backslash to handle both POSIX and Windows
+		const pathSegments = absolutePath.split(/[/\\]/);
+		const basename = pathSegments[pathSegments.length - 1] || '';
+		
+		let filename = basename;
+		const dotIndex = basename.lastIndexOf('.');
+		
+		// If dotIndex > 0, strip the extension.
+		// If dotIndex === 0, it's a hidden file with no extra extension (e.g., '.env' or '.bashrc')
+		if (dotIndex > 0) {
+			filename = basename.substring(0, dotIndex);
+		}
+		
+		// URL unescaping for the extracted filename
+		try {
+			filename = decodeURIComponent(filename);
+		} catch {
+			// If it fails (e.g., a literal '%' that isn't a valid URI sequence), retain original
+		}
+		
+		// ====================================================================
+		// 2. Generate File URI (Based on Wikipedia: File URI scheme)
+		// ====================================================================
+		// Reference: https://en.wikipedia.org/wiki/File_URI_scheme
+		
+		// Normalize all backslashes to forward slashes
+		let uriPath = absolutePath.replace(/\\/g, '/');
+		
+		let isUNC = false;
+		let hostname = '';
+		
+		// Handle Windows UNC paths (e.g., \\server\share\file.ext -> //server/share/file.ext)
+		if (uriPath.startsWith('//')) {
+			isUNC = true;
+			const parts = uriPath.split('/');
+			// parts[0] = '', parts[1] = '', parts[2] = hostname
+			hostname = parts[2] || '';
+			// The remainder is the local path on the server
+			uriPath = '/' + parts.slice(3).join('/');
+		}
+		
+		// Percent-encode the path segments properly for the URI
+		const segments = uriPath.split('/');
+		const encodedSegments = segments.map((segment, index) => {
+			// Standard File URI format preserves the Windows drive letter without encoding the colon.
+			// (e.g., C:/ -> file:///C:/)
+			if ((index === 0 || (index === 1 && segments[0] === '')) && /^[a-zA-Z]:$/.test(segment)) {
+				return segment;
+			}
+			// Percent-encode other segments (handles spaces, #, ?, +, etc.)
+			return encodeURIComponent(segment);
+		});
+		
+		uriPath = encodedSegments.join('/');
+		
+		let fileUri = '';
+		
+		if (isUNC) {
+			// 2-slash format for UNC paths (e.g., file://server/share/file.ext)
+			fileUri = `file://${hostname}${uriPath}`;
+		} else {
+			// Local paths. Must have 3 slashes if no hostname (e.g., file:///path/to/file.ext)
+			if (!uriPath.startsWith('/')) {
+				uriPath = '/' + uriPath;
+			}
+			fileUri = `file://${uriPath}`;
+		}
+		
+		return {
+			filename,
+			fileUri
+		};
 	}
 
 	/**

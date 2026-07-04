@@ -13,13 +13,38 @@ import { zhongwenTasks } from './libs/zhongwen';
 import { appendToPromptCallout, getPromptCallouts, replacePromptCallout } from './libs/prompt-parser';
 import { LatexSuggest } from './libs/autosuggestions';
 import { InsertLatexModal } from './modals/latex_modal';
+import { InsertLocalFileModal } from './modals/localfile_modal';
 import { DictionaryView, VIEW_TYPE_DICTIONARY } from './dict/dictUI';
+
 
 export default class ImgWebpOptimizerPlugin extends Plugin {
 	settings?: ImgOptimizerPluginSettings;
-	locked: boolean = false;
+	private locks = new Map<string, boolean>();
 	latexSuggest!: LatexSuggest;
 	
+
+	/**
+	 * Acquires a named lock before executing an async function.
+	 * If any lock is currently held, shows a Notice and returns null.
+	 * Always releases the lock in `finally`.
+	 */
+	async withLock<T>(
+		operation: string,
+		fn: () => Promise<T>,
+		blockedMessage?: string
+	): Promise<T | null> {
+		if (this.locks.size > 0) {
+			new Notice(blockedMessage || `${operation} is already in progress. Please wait.`);
+			return null;
+		}
+
+		this.locks.set(operation, true);
+		try {
+			return await fn();
+		} finally {
+			this.locks.delete(operation);
+		}
+	}
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
@@ -152,7 +177,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 					});
 
 					// register submenu:
-					registerContextMenu(menu, editor, view, this.handleWrapCallout.bind(this), this.handleChangeCase.bind(this), this.handleZhongwen.bind(this), this.handlePromptCallouts.bind(this), this.handleLatexModal.bind(this));
+					registerContextMenu(menu, editor, view, this.handleWrapCallout.bind(this), this.handleChangeCase.bind(this), this.handleZhongwen.bind(this), this.handlePromptCallouts.bind(this), this.handleLatexModal.bind(this), this.handleLocalFileModal.bind(this));
 				}
 			})
 		);
@@ -170,6 +195,17 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		// Add ribbon icon to open dictionary
 		this.addRibbonIcon('book-a', 'Open Alapaki Dictionary', () => {
 			this.activateDictionaryView();
+		});
+
+		// Add command to insert file paths
+		this.addCommand({
+			id: 'alapaki-insert-file-paths',
+			name: 'Insert file paths',
+			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
+				if (view instanceof MarkdownView) {
+					await this.handleLocalFileModal(editor);
+				}
+			}
 		});
 
 		// Add command to open dictionary
@@ -200,69 +236,74 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 			// Check if we should use native browser conversion for supported formats
 			const useNativeConversion = ['webp', 'jpeg', 'jpg', 'png'].includes(imageFormat.toLowerCase());
 
-			if (useNativeConversion && !forceS3Upload) {
-				// Use native Web Browser API for local conversion
-				const convertedBlob = await tUtils.convertImageLocally(blob, imageFormat, this.settings?.compressionLevel || defaultCompressionLevel);
-				if (!convertedBlob) {
-					new Notice('Failed to convert image locally');
-					return null;
+			const scenario = `${useNativeConversion ? 'native' : 'server'}_${forceS3Upload ? 's3' : 'local'}`;
+
+			switch (scenario) {
+				case 'native_local': {
+					// Use native Web Browser API for local conversion
+					const convertedBlob = await tUtils.convertImageLocally(blob, imageFormat, this.settings?.compressionLevel || defaultCompressionLevel);
+					if (!convertedBlob) {
+						new Notice('Failed to convert image locally');
+						return null;
+					}
+
+					// Save the converted blob locally
+					const arrayBuffer = await convertedBlob.arrayBuffer();
+					const fileExtension = imageFormat === 'jpeg' ? 'jpg' : imageFormat;
+					const randomFilename = tUtils.randomFilename(fileExtension);
+
+					const filePath = await this.app.fileManager.getAvailablePathForAttachment(randomFilename);
+					const file = await this.app.vault.createBinary(filePath, arrayBuffer);
+
+					return file.path;
 				}
 
-				// Save the converted blob locally
-				const arrayBuffer = await convertedBlob.arrayBuffer();
-				const fileExtension = imageFormat === 'jpeg' ? 'jpg' : imageFormat;
-				const randomFilename = tUtils.randomFilename(fileExtension);
+				case 'native_s3': {
+					// Convert locally first, then upload to S3
+					const convertedBlob = await tUtils.convertImageLocally(blob, imageFormat, this.settings?.compressionLevel || defaultCompressionLevel);
+					if (!convertedBlob) {
+						new Notice('Failed to convert image locally for S3 upload');
+						return null;
+					}
 
-				const filePath = await this.app.fileManager.getAvailablePathForAttachment(randomFilename);
-				const file = await this.app.vault.createBinary(filePath, arrayBuffer);
+					// Create S3 path
+					const local_path = path.dirname(await this.app.fileManager.getAvailablePathForAttachment('file.bin'));
+					const s3_path = `${tUtils.slugifyVaultName(this.app.vault.getName())}/${tUtils.localPathToPartialUrl(local_path)}/${tUtils.randomFilename(imageFormat === 'jpeg' ? 'jpg' : imageFormat)}`;
 
-				return file.path;
-			} else if (useNativeConversion && forceS3Upload) {
-				// Convert locally first, then upload to S3
-				const convertedBlob = await tUtils.convertImageLocally(blob, imageFormat, this.settings?.compressionLevel || defaultCompressionLevel);
-				if (!convertedBlob) {
-					new Notice('Failed to convert image locally for S3 upload');
-					return null;
+					// Create FormData for S3 uploads (multipart/form-data with file upload)
+					const formData = new FormData();
+					formData.append('image', convertedBlob, `image.${imageFormat === 'jpeg' ? 'jpg' : imageFormat}`); // Attach converted blob as file
+					formData.append('s3_path', s3_path);
+
+					// Make the HTTP POST request using axios with FormData
+					const endpointUrl = `${this.settings?.apiServer}/images/save_s3`;
+					const response = await axios.post(endpointUrl, formData, {
+						headers: {
+							'Content-Type': 'multipart/form-data',
+						},
+						responseType: 'json',
+					});
+
+					// Handle the JSON response
+					const responseData = response.data as {
+						success: boolean;
+						errors?: string;
+						messages?: string;
+						result?: { url: string };
+					};
+
+					if (responseData.success === true && responseData.result?.url) {
+						console.log(`S3 upload successful: ${responseData.messages || 'Image uploaded'}`);
+						return responseData.result.url;
+					} else {
+						const errorMsg = responseData.errors || 'Unknown S3 upload error';
+						console.error('S3 upload failed:', errorMsg);
+						new Notice(`S3 upload failed: ${errorMsg}`);
+						return null;
+					}
 				}
 
-				// Create S3 path
-				const local_path = path.dirname(await this.app.fileManager.getAvailablePathForAttachment('file.bin'));
-				const s3_path = `${tUtils.slugifyVaultName(this.app.vault.getName())}/${tUtils.localPathToPartialUrl(local_path)}/${tUtils.randomFilename(imageFormat === 'jpeg' ? 'jpg' : imageFormat)}`;
-
-				// Create FormData for S3 uploads (multipart/form-data with file upload)
-				const formData = new FormData();
-				formData.append('image', convertedBlob, `image.${imageFormat === 'jpeg' ? 'jpg' : imageFormat}`); // Attach converted blob as file
-				formData.append('s3_path', s3_path);
-
-				// Make the HTTP POST request using axios with FormData
-				const endpointUrl = `${this.settings?.apiServer}/images/save_s3`;
-				const response = await axios.post(endpointUrl, formData, {
-					headers: {
-						'Content-Type': 'multipart/form-data',
-					},
-					responseType: 'json',
-				});
-
-				// Handle the JSON response
-				const responseData = response.data as {
-					success: boolean;
-					errors?: string;
-					messages?: string;
-					result?: { url: string };
-				};
-
-				if (responseData.success === true && responseData.result?.url) {
-					console.log(`S3 upload successful: ${responseData.messages || 'Image uploaded'}`);
-					return responseData.result.url;
-				} else {
-					const errorMsg = responseData.errors || 'Unknown S3 upload error';
-					console.error('S3 upload failed:', errorMsg);
-					new Notice(`S3 upload failed: ${errorMsg}`);
-					return null;
-				}
-			} else {
-				// For AVIF or other formats, use the existing API logic
-				if (!forceS3Upload) {
+				case 'server_local': {
 					// Local upload: use multipart/form-data with file upload
 					const endpointUrl = `${this.settings?.apiServer}/images/transform_download`;
 
@@ -297,7 +338,9 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 						new Notice('Failed to save the processed image');
 						return null;
 					}
-				} else {
+				}
+
+				case 'server_s3': {
 					// S3 upload: use multipart/form-data with JSON response
 					const endpointUrl = `${this.settings?.apiServer}/images/transform_save_s3`;
 
@@ -346,6 +389,9 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 						return null;
 					}
 				}
+
+				default:
+					return null;
 			}
 
 		} catch (error: unknown) {
@@ -366,57 +412,94 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	 * Shows a modal to confirm the extracted text and allow the user to
 	 * include the image in the markdown if desired.
 	 */
-    async handleOCR(editor: Editor, mode: 'ocr-markdownify' | 'ocr-ai' | 'ocr-companion' | 'ocr-native' = 'ocr-markdownify') {
-		const clipboardItems = await navigator.clipboard.read();
+	/**
+	 * Reads and validates PNG image items from the clipboard.
+	 * Checks lock, clipboard availability, read success, and filters for PNGs.
+	 * Returns the image items, or null if validation fails (which displays a Notice).
+	 */
+	private async readClipboardPNGItems(): Promise<ClipboardItem[] | null> {
+		if (!navigator.clipboard || !navigator.clipboard.read) {
+			new Notice(`Clipboard API is not available`);
+			return null;
+		}
 
-		if(this.locked) {
-			new Notice(`Image Conversion in Progress: Please hold on for a moment`);
-			return;
-		} else if(!clipboardItems) {
+		let clipboardItems;
+		try {
+			clipboardItems = await navigator.clipboard.read();
+		} catch (error) {
+			new Notice(`Failed to read clipboard: ${error instanceof Error ? error.message : 'Permission denied'}`);
+			return null;
+		}
+
+		if (!clipboardItems || clipboardItems.length === 0) {
 			new Notice(`Clipboard is empty`);
+			return null;
+		}
+
+		const imageItems = clipboardItems.filter(item => item.types.includes("image/png"));
+		if (imageItems.length === 0) {
+			new Notice(`No PNG image found in clipboard`);
+			return null;
+		}
+
+		return imageItems;
+	}
+
+    async handleOCR(editor: Editor, mode: 'ocr-markdownify' | 'ocr-ai' | 'ocr-companion' | 'ocr-native' = 'ocr-markdownify') {
+		const imageItems = await this.readClipboardPNGItems();
+		if (!imageItems) {
 			return;
 		}
 
-		const context = { settings: { apiServer: this.settings?.apiServer || '' } };
-		const promises = clipboardItems
-			.filter(item => item.types.includes("image/png"))
-			.map(async (item) => {
-				const blob = await item.getType("image/png");
-				let resultText = '';
-				if (mode === 'ocr-ai') {
-					resultText = await convertOCRAI(blob, context);
-				} else if (mode === 'ocr-native') {
-					resultText = await convertOCRNative(blob, context);
-				} else if (mode === 'ocr-companion') {
-					resultText = await convertOCRCompanion(blob, context);
-				} else {
-					resultText = await convertOCRMarkdownify(blob, context);
-				}
+		await this.withLock('handleOCR', async () => {
+			const modal = new LoadingModal(this.app);
+			modal.status = 'OCR-ing...';
+			modal.open();
 
-				// fix faulty LLM text
-				resultText = tUtils.normalizeMathDelimiters(resultText);
+			try {
+				const context = { settings: { apiServer: this.settings?.apiServer || '' } };
+				const promises = imageItems.map(async (item) => {
+					const blob = await item.getType("image/png");
+					let resultText = '';
+					switch (mode) {
+						case 'ocr-ai':
+							resultText = await convertOCRAI(blob, context);
+							break;
+						case 'ocr-native':
+							resultText = await convertOCRNative(blob, context);
+							break;
+						case 'ocr-companion':
+							resultText = await convertOCRCompanion(blob, context);
+							break;
+						default:
+							resultText = await convertOCRMarkdownify(blob, context);
+							break;
+					}
 
-				const modal = new ImageTextModal(this.app, {
-					imageSrc: blob,
-					resultText: resultText,
+					// fix faulty LLM text
+					resultText = tUtils.normalizeMathDelimiters(resultText);
+
+					const imageTextModal = new ImageTextModal(this.app, {
+						imageSrc: blob,
+						resultText: resultText,
+					});
+
+					const result = await imageTextModal.openWithPromise();
+
+					if (result) {
+						const filePath = result.includeImage ? await this.convertWrapper(blob, this.settings?.useS3Storage) : null;
+						await insertContent(editor, filePath, result.textContent);
+					}
 				});
 
-				const result = await modal.openWithPromise();
-
-				if (result) {
-					const filePath = result.includeImage ? await this.convertWrapper(blob, this.settings?.useS3Storage) : null;
-					await insertContent(editor, filePath, result.textContent);
-				}
-			});
-
-		this.locked = true;
-		const modal = new LoadingModal(this.app);
-		modal.status = 'OCR-ing...';
-    	modal.open();
-
-		await Promise.all(promises);
-		this.locked = false;
-		modal.close();
+				await Promise.all(promises);
+			} catch (error) {
+				console.error('Error during OCR processing:', error);
+				new Notice(`OCR failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			} finally {
+				modal.close();
+			}
+		});
     }
 
 	/**
@@ -428,27 +511,24 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		if (selectedText.length == 0) {
 			new Notice("No text selected");
 			return;
-		} else if (this.locked) {
-			new Notice(`Image Conversion in Progress: Please hold on for a moment`);
-			return;
-		} else {
+		}
+
+		await this.withLock('handleSummarize', async () => {
 			const msg = `Summarizing text...`;
 			console.log(msg);
 			new Notice(msg);
-		}
 
-		this.locked = true;
-    	const modal = new LoadingModal(this.app);
-		modal.status = 'Summarizing text...';
-    	modal.open();
+			const modal = new LoadingModal(this.app);
+			modal.status = 'Summarizing text...';
+			modal.open();
 
-		try {
-			const endpointUrl = `${this.settings?.apiServer}/text/generator`;
+			try {
+				const endpointUrl = `${this.settings?.apiServer}/text/generator`;
 
-			const requestBody = {
-				prompt: "Summarize the provided Markdown text into concise, key bullet points. Focus on capturing the main ideas, key steps, or critical information. Aim for brevity, while retaining the essential meaning.",
-				providedText: selectedText,
-				system: `You are a helpful research assistant that provides clear, concise summaries of text content.
+				const requestBody = {
+					prompt: "Summarize the provided Markdown text into concise, key bullet points. Focus on capturing the main ideas, key steps, or critical information. Aim for brevity, while retaining the essential meaning.",
+					providedText: selectedText,
+					system: `You are a helpful research assistant that provides clear, concise summaries of text content.
 Output Markdown compatible with Obsidian.
 Rules:
 - Inline math MUST use $...$.
@@ -456,110 +536,107 @@ Rules:
 - Never use \( ... \) or \[ ... \] to wrap LaTex math.
 - Never wrap non-mathematical text in math delimiters.
 `
-			};
+				};
 
-			const response = await axios.post(endpointUrl, requestBody, {
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				responseType: 'json',
-			});
+				const response = await axios.post(endpointUrl, requestBody, {
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					responseType: 'json',
+				});
 
-			const responseData = response.data as {
-				success: boolean;
-				errors?: string;
-				messages?: string;
-				result?: { text: string };
-			};
+				const responseData = response.data as {
+					success: boolean;
+					errors?: string;
+					messages?: string;
+					result?: { text: string };
+				};
 
-			let resultText = '';
-			if (responseData.success === true && responseData.result?.text) {
-				resultText = responseData.result.text;
-			} else if (responseData.errors) {
-				resultText = `Text generation error: ${responseData.errors}`;
-			} else {
-				resultText = 'Text generation error: Unknown error occurred';
+				let resultText = '';
+				if (responseData.success === true && responseData.result?.text) {
+					resultText = responseData.result.text;
+				} else if (responseData.errors) {
+					resultText = `Text generation error: ${responseData.errors}`;
+				} else {
+					resultText = 'Text generation error: Unknown error occurred';
+				}
+
+				// Insert the returned text below the original selection
+				await insertContent(editor, null, resultText, "to");
+
+			} catch (error) {
+				const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+				console.error('Error in text generation:', error);
+				const errorText = `Error generating summary: ${errorMessage}`;
+				await insertContent(editor, null, errorText, "to");
+			} finally {
+				modal.close();
 			}
-
-			// Insert the returned text below the original selection
-			await insertContent(editor, null, resultText, "to");
-
-		} catch (error) {
-			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-			console.error('Error in text generation:', error);
-			const errorText = `Error generating summary: ${errorMessage}`;
-			await insertContent(editor, null, errorText, "to");
-		}
-
-		this.locked = false;
-		modal.close();
+		});
 	}
 
-	async handleZhongwen(editor: Editor , tasks: 'grammar' | 'word-usage-en' | 'word-usage-vi' | 'explain') {
+	async handleZhongwen(editor: Editor, tasks: 'grammar' | 'word-usage-en' | 'word-usage-vi' | 'explain') {
 		const selectedText = editor.getSelection().trim();
 
 		if (selectedText.length == 0) {
 			new Notice("No text selected");
 			return;
-		} else if (this.locked) {
-			new Notice(`Image Conversion in Progress: Please hold on for a moment`);
-			return;
-		} else {
+		}
+
+		await this.withLock('handleZhongwen', async () => {
 			const msg = `Analyzing text...`;
 			console.log(msg);
 			new Notice(msg);
-		}
 
-		this.locked = true;
-    	const modal = new LoadingModal(this.app);
-		modal.status = 'Analyzing text...';
-    	modal.open();
+			const modal = new LoadingModal(this.app);
+			modal.status = 'Analyzing text...';
+			modal.open();
 
-		try {
-			const endpointUrl = `${this.settings?.apiServer}/text/zhongwen`;
-			const { prompt: zh_prompt, system: zh_system } = zhongwenTasks(tasks, selectedText);
+			try {
+				const endpointUrl = `${this.settings?.apiServer}/text/zhongwen`;
+				const { prompt: zh_prompt, system: zh_system } = zhongwenTasks(tasks, selectedText);
 
-			const requestBody = {
-				prompt: zh_prompt,
-				providedText: '',
-				system: zh_system
-			};
+				const requestBody = {
+					prompt: zh_prompt,
+					providedText: '',
+					system: zh_system
+				};
 
-			const response = await axios.post(endpointUrl, requestBody, {
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				responseType: 'json',
-			});
+				const response = await axios.post(endpointUrl, requestBody, {
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					responseType: 'json',
+				});
 
-			const responseData = response.data as {
-				success: boolean;
-				errors?: string;
-				messages?: string;
-				result?: { text: string };
-			};
+				const responseData = response.data as {
+					success: boolean;
+					errors?: string;
+					messages?: string;
+					result?: { text: string };
+				};
 
-			let resultText = '';
-			if (responseData.success === true && responseData.result?.text) {
-				resultText = responseData.result.text;
-			} else if (responseData.errors) {
-				resultText = `Text generation error: ${responseData.errors}`;
-			} else {
-				resultText = 'Text generation error: Unknown error occurred';
+				let resultText = '';
+				if (responseData.success === true && responseData.result?.text) {
+					resultText = responseData.result.text;
+				} else if (responseData.errors) {
+					resultText = `Text generation error: ${responseData.errors}`;
+				} else {
+					resultText = 'Text generation error: Unknown error occurred';
+				}
+
+				// Insert the returned text below the original selection
+				await insertContent(editor, null, resultText, "to");
+
+			} catch (error) {
+				const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+				console.error('Error in text generation:', error);
+				const errorText = `Error generating summary: ${errorMessage}`;
+				await insertContent(editor, null, errorText, "to");
+			} finally {
+				modal.close();
 			}
-
-			// Insert the returned text below the original selection
-			await insertContent(editor, null, resultText, "to");
-
-		} catch (error) {
-			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-			console.error('Error in text generation:', error);
-			const errorText = `Error generating summary: ${errorMessage}`;
-			await insertContent(editor, null, errorText, "to");
-		}
-
-		this.locked = false;
-		modal.close();
+		});
 	}
 
 	/**
@@ -572,34 +649,33 @@ Rules:
 	 * @param {boolean} forceS3Upload - Optional. If true, forces the image to be uploaded to S3 instead of local storage.
 	 */
     async handleClipboardImage(editor: Editor, _view: MarkdownView, forceS3Upload: boolean = false) {
-		const clipboardItems = (await navigator.clipboard.read()).filter(item => item.types.includes("image/png"));
-
-		if(this.locked) {
-			new Notice(`Image Conversion in Progress: Please hold on for a moment`);
-			return;
-		} else if(clipboardItems.length == 0) {
-			new Notice(`Clipboard is empty`);
+		const imageItems = await this.readClipboardPNGItems();
+		if (!imageItems) {
 			return;
 		}
 
-		const promises = clipboardItems
-			.map(async (item) => {
-				const blob = await item.getType("image/png");
-				const filePath = await this.convertWrapper(blob, forceS3Upload);
-				await insertContent(editor, filePath);
-			});
+		await this.withLock('handleClipboardImage', async () => {
+			const modal = new LoadingModal(this.app);
+			modal.status = 'Transforming...';
+			modal.open();
 
-		this.locked = true;
-    	const modal = new LoadingModal(this.app);
-		modal.status = 'Transforming...';
-    	modal.open();
+			try {
+				const promises = imageItems.map(async (item) => {
+					const blob = await item.getType("image/png");
+					const filePath = await this.convertWrapper(blob, forceS3Upload);
+					await insertContent(editor, filePath);
+				});
 
-		await Promise.all(promises);
-		
-		this.locked = false;
-		modal.close();
+				await Promise.all(promises);
+			} catch (error) {
+				console.error('Error in clipboard image processing:', error);
+				new Notice(`Image conversion failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			} finally {
+				modal.close();
+			}
+		});
     }
-	
+
 	/**
 	 * Handles the Change Case action.
 	 * Shows a modal to allow the user to select the desired case conversion.
@@ -621,6 +697,28 @@ Rules:
 		const result = await modal.openWithPromise();
 		if (result) { // Simplified null check
 			editor.replaceSelection(result.textContent);
+		}
+    }
+
+    async handleLocalFileModal(editor: Editor) {
+		const modal = new InsertLocalFileModal(this.app, {
+			paths: '',
+			keepExtension: false,
+		});
+
+		const result = await modal.openWithPromise();
+		if (result) {
+			const cursor = editor.getCursor();
+
+			// Insert text at cursor (doesn't replace anything)
+			editor.replaceRange(result.textContent, cursor);
+
+			// Move cursor to end of inserted text
+			const lines = result.textContent.split('\n');
+			editor.setCursor({
+				line: cursor.line + lines.length - 1,
+				ch: lines.length === 1 ? cursor.ch + result.textContent.length : lines[lines.length - 1].length,
+			});
 		}
     }
 
@@ -682,73 +780,66 @@ Rules:
     }
 
     async handlePromptCallouts() {
-		if(this.locked) {
-			new Notice(`Image Conversion in Progress: Please hold on for a moment`);
-			return;
-		}
-
 		// Get all the prompts
 		const prompts = getPromptCallouts(this.app);
 
 		// loop through prompts' members
 		for (const [uuid, prompt] of Object.entries(prompts)) {
 
-			// lock
-			this.locked = true;
-			const modal = new LoadingModal(this.app);
-			modal.status = 'Reasoning...';
-			modal.open();
+			await this.withLock('handlePromptCallouts', async () => {
+				const modal = new LoadingModal(this.app);
+				modal.status = 'Reasoning...';
+				modal.open();
 
-			// start the job
-			const endpointUrl = `${this.settings?.apiServer}/text/generator`;
-			const requestBody = {
-				prompt: prompt,
-				providedText: '',
-				system: `You are a helpful research assistant.
+				try {
+					// start the job
+					const endpointUrl = `${this.settings?.apiServer}/text/generator`;
+					const requestBody = {
+						prompt: prompt,
+						providedText: '',
+						system: `You are a helpful research assistant.
 Output your answer in Markdown format.
 For section headers, include the header text as plain text **without using Markdown heading syntax** (do not use \`#\`, \`##\`, etc.).
 **Do not use horizontal rules** (\`---\`, \`***\`, or similar).
 Visually separate sections using spacing and/or bold text only.`
-			};
+					};
 
-			try {
-				const response = await axios.post(endpointUrl, requestBody, {
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					responseType: 'json',
-				});
+					const response = await axios.post(endpointUrl, requestBody, {
+						headers: {
+							'Content-Type': 'application/json',
+						},
+						responseType: 'json',
+					});
 
-				const responseData = response.data as {
-					success: boolean;
-					errors?: string;
-					messages?: string;
-					result?: { text: string };
-				};
+					const responseData = response.data as {
+						success: boolean;
+						errors?: string;
+						messages?: string;
+						result?: { text: string };
+					};
 
-				let resultText = '';
-				if (responseData.success === true && responseData.result?.text) {
-					resultText = responseData.result.text;
-					replacePromptCallout(this.app, uuid, resultText);
-				} else if (responseData.errors) {
-					resultText = `❌ Text generation error: ${responseData.errors}`;
-					appendToPromptCallout(this.app, uuid, resultText);
-				} else {
-					resultText = '❌ Text generation error: Unknown error occurred';
-					appendToPromptCallout(this.app, uuid, resultText);
+					let resultText = '';
+					if (responseData.success === true && responseData.result?.text) {
+						resultText = responseData.result.text;
+						replacePromptCallout(this.app, uuid, resultText);
+					} else if (responseData.errors) {
+						resultText = `❌ Text generation error: ${responseData.errors}`;
+						appendToPromptCallout(this.app, uuid, resultText);
+					} else {
+						resultText = '❌ Text generation error: Unknown error occurred';
+						appendToPromptCallout(this.app, uuid, resultText);
+					}
+
+				} catch (error) {
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					console.log('Error in text generation:', error);
+					const errorText = `❌ Error generating response: ${errorMessage}`;
+					appendToPromptCallout(this.app, uuid, errorText);
+				} finally {
+					modal.close();
 				}
-
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-				console.log('Error in text generation:', error);
-				const errorText = `❌ Error generating response: ${errorMessage}`;
-				appendToPromptCallout(this.app, uuid, errorText);
-			}
-
-			// release the lock
-			this.locked = false;
-			modal.close();
-		}		
+			});
+		}
     }
 
 	async activateDictionaryView() {
