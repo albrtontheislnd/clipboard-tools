@@ -71,7 +71,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		// This adds an editor command that can perform some operation on the current editor instance
 		this.addCommand({
 			id: 'paste-optimized-img',
-			name: 'Embed clipboard image',
+			name: 'Embed image',
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
 				if (view instanceof MarkdownView) {
 					// Handle the case where ctx is a MarkdownFileInfo
@@ -82,7 +82,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 
 		this.addCommand({
 			id: 's3-optimized-img',
-			name: 'Optimize and save to S3 Storage',
+			name: 'Save to Cloud',
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
 				if (view instanceof MarkdownView) {
 					// Handle the case where ctx is a MarkdownFileInfo
@@ -93,7 +93,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'alapaki-ocr-markdownify',
-			name: 'Image to Markdown/Latex (LLM)',
+			name: 'Markdownify (LLM)',
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
 				if (view instanceof MarkdownView) {
 					await this.handleOCR(editor, 'ocr-markdownify');
@@ -103,7 +103,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'alapaki-ocr-ai',
-			name: 'Image to Markdown/Latex (preset AI Engine)',
+			name: 'Markdownify (preset AI Engine)',
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
 				if (view instanceof MarkdownView) {
 					await this.handleOCR(editor, 'ocr-ai');
@@ -113,7 +113,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'alapaki-ocr-native',
-			name: 'Image to Text (experimental native API)',
+			name: 'Markdownify (native API)',
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
 				if (view instanceof MarkdownView) {
 					await this.handleOCR(editor, 'ocr-native');
@@ -123,7 +123,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'alapaki-ocr-companion',
-			name: 'Image to Text (companion app)',
+			name: 'Markdownify (companion app)',
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
 				if (view instanceof MarkdownView) {
 					await this.handleOCR(editor, 'ocr-companion');
@@ -133,7 +133,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'alapaki-summarize',
-			name: 'Summarize text (LLM)',
+			name: 'Summarize',
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
 				if (view instanceof MarkdownView) {
 					await this.handleSummarize(editor);
@@ -152,22 +152,22 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 					});
 
 					menu.addItem((item) => {
-						item.setTitle(`Save to S3 (${this.settings?.imageFormat.toUpperCase()})`).setIcon('image-plus')
+						item.setTitle(`Save to Cloud (${this.settings?.imageFormat.toUpperCase()})`).setIcon('image-plus')
 							.onClick(async () => await this.handleClipboardImage(editor, view, this.settings?.useS3Storage));
 					});
 
 					menu.addItem((item) => {
-						item.setTitle(`Markdownify`).setIcon('brain-circuit')
+						item.setTitle(`Markdownify (LLM)`).setIcon('brain-circuit')
 							.onClick(async () => await this.handleOCR(editor, 'ocr-markdownify'));
 					});
 
 					menu.addItem((item) => {
-						item.setTitle(`OCR Preset`).setIcon('brain-circuit')
+						item.setTitle(`Markdownify (preset)`).setIcon('brain-circuit')
 							.onClick(async () => await this.handleOCR(editor, 'ocr-ai'));
 					});
 
 					menu.addItem((item) => {
-						item.setTitle(`OCR Companion/Native`).setIcon('brain-circuit')
+						item.setTitle(`Markdownify (native)`).setIcon('brain-circuit')
 							.onClick(async () => await this.handleOCR(editor, 'ocr-companion'));
 					});
 
@@ -253,7 +253,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 				case 'native_s3': {
 					const convertedBlob = await tUtils.convertImageInWorker(blob, imageFormat, compressionLevel);
 					if (!convertedBlob) {
-						new Notice('Failed to convert image locally for S3 upload');
+						new Notice('Failed to convert image locally for cloud upload');
 						return null;
 					}
 
@@ -349,12 +349,12 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		};
 
 		if (responseData.success === true && responseData.result?.url) {
-			console.log(`S3 upload successful: ${responseData.messages || 'Image uploaded'}`);
+			console.log(`Cloud upload successful: ${responseData.messages || 'Image uploaded'}`);
 			return responseData.result.url;
 		} else {
-			const errorMsg = responseData.errors || 'Unknown S3 upload error';
-			console.error('S3 upload failed:', errorMsg);
-			new Notice(`S3 upload failed: ${errorMsg}`);
+			const errorMsg = responseData.errors || 'Unknown cloud upload error';
+			console.error('Cloud upload failed:', errorMsg);
+			new Notice(`Cloud upload failed: ${errorMsg}`);
 			return null;
 		}
 	}

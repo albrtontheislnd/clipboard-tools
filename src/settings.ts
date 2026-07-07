@@ -92,10 +92,10 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
 			})
 		);
 
-		// Use S3 Storage setting
+		// Use Cloud Storage setting
 		new Setting(containerEl)
-		.setName('Use S3 Storage')
-		.setDesc('Enable the use of S3 storage for uploads')
+		.setName('Use Cloud Storage')
+		.setDesc('Enable the use of cloud storage for uploads')
 		.addToggle((toggle) =>
 			toggle
 			.setValue(this.plugin.settings?.useS3Storage ?? false)
