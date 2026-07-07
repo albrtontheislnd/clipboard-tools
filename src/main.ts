@@ -1,7 +1,7 @@
 import { Editor, MarkdownFileInfo, MarkdownView, Notice, Plugin, WorkspaceLeaf } from 'obsidian';
-import axios from 'axios';
+import axios, { AxiosResponse } from 'axios';
 import { tUtils } from './libs/utils';
-import { DEFAULT_SETTINGS, ImgOptimizerPluginSettingsTab } from './settings';
+import { ConfigValues, DEFAULT_SETTINGS, ImgOptimizerPluginSettingsTab } from './settings';
 import { ImgOptimizerPluginSettings } from './libs/plugin_interfaces';
 import { ImageTextModal } from './modals/aiprompt_modal';
 import { ChangeCaseModal } from './modals/changecase_modal';
@@ -71,7 +71,7 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 		// This adds an editor command that can perform some operation on the current editor instance
 		this.addCommand({
 			id: 'paste-optimized-img',
-			name: 'Embed clipboard image in WEBP/AVIF/PNG/JPEG format',
+			name: 'Embed clipboard image',
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
 				if (view instanceof MarkdownView) {
 					// Handle the case where ctx is a MarkdownFileInfo
@@ -228,166 +228,79 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	 */
 	async convertWrapper(blob: Blob, forceS3Upload: boolean = false): Promise<string | null> {
 
-		const defaultImageFormat = 'avif';
-		const defaultCompressionLevel = 70;
-		const imageFormat = this.settings?.imageFormat || defaultImageFormat;
+		const imageFormat = (this.settings?.imageFormat ?? DEFAULT_SETTINGS.imageFormat).toLowerCase();
+		const compressionLevel = this.settings?.compressionLevel ?? DEFAULT_SETTINGS.compressionLevel;
+		const apiServer = this.settings?.apiServer ?? DEFAULT_SETTINGS.apiServer;
 
 		try {
 			// Check if we should use native browser conversion for supported formats
-			const useNativeConversion = ['webp', 'jpeg', 'jpg', 'png'].includes(imageFormat.toLowerCase());
+			const useNativeConversion = ConfigValues.useNativeConversion.includes(imageFormat);
 
 			const scenario = `${useNativeConversion ? 'native' : 'server'}_${forceS3Upload ? 's3' : 'local'}`;
 
 			switch (scenario) {
 				case 'native_local': {
-					// Use web worker with OffscreenCanvas for local conversion
-					const convertedBlob = await tUtils.convertImageInWorker(blob, imageFormat, this.settings?.compressionLevel || defaultCompressionLevel);
+					const convertedBlob = await tUtils.convertImageInWorker(blob, imageFormat, compressionLevel);
 					if (!convertedBlob) {
 						new Notice('Failed to convert image locally');
 						return null;
 					}
 
-					// Save the converted blob locally
 					const arrayBuffer = await convertedBlob.arrayBuffer();
-					const fileExtension = imageFormat === 'jpeg' ? 'jpg' : imageFormat;
-					const randomFilename = tUtils.randomFilename(fileExtension);
-
-					const filePath = await this.app.fileManager.getAvailablePathForAttachment(randomFilename);
-					const file = await this.app.vault.createBinary(filePath, arrayBuffer);
-
-					return file.path;
+					return this.saveImageToVault(arrayBuffer, imageFormat);
 				}
 
 				case 'native_s3': {
-					// Convert in web worker first, then upload to S3
-					const convertedBlob = await tUtils.convertImageInWorker(blob, imageFormat, this.settings?.compressionLevel || defaultCompressionLevel);
+					const convertedBlob = await tUtils.convertImageInWorker(blob, imageFormat, compressionLevel);
 					if (!convertedBlob) {
 						new Notice('Failed to convert image locally for S3 upload');
 						return null;
 					}
 
-					// Create S3 path
-					const local_path = path.dirname(await this.app.fileManager.getAvailablePathForAttachment('file.bin'));
-					const s3_path = `${tUtils.slugifyVaultName(this.app.vault.getName())}/${tUtils.localPathToPartialUrl(local_path)}/${tUtils.randomFilename(imageFormat === 'jpeg' ? 'jpg' : imageFormat)}`;
-
-					// Create FormData for S3 uploads (multipart/form-data with file upload)
+					const s3_path = await this.buildS3Path(imageFormat);
 					const formData = new FormData();
-					formData.append('image', convertedBlob, `image.${imageFormat === 'jpeg' ? 'jpg' : imageFormat}`); // Attach converted blob as file
+					formData.append('image', convertedBlob, `image.${imageFormat === 'jpeg' ? 'jpg' : imageFormat}`);
 					formData.append('s3_path', s3_path);
 
-					// Make the HTTP POST request using axios with FormData
-					const endpointUrl = `${this.settings?.apiServer}/images/save_s3`;
+					const endpointUrl = `${apiServer}/images/save_s3`;
 					const response = await axios.post(endpointUrl, formData, {
-						headers: {
-							'Content-Type': 'multipart/form-data',
-						},
+						headers: { 'Content-Type': 'multipart/form-data' },
 						responseType: 'json',
 					});
 
-					// Handle the JSON response
-					const responseData = response.data as {
-						success: boolean;
-						errors?: string;
-						messages?: string;
-						result?: { url: string };
-					};
-
-					if (responseData.success === true && responseData.result?.url) {
-						console.log(`S3 upload successful: ${responseData.messages || 'Image uploaded'}`);
-						return responseData.result.url;
-					} else {
-						const errorMsg = responseData.errors || 'Unknown S3 upload error';
-						console.error('S3 upload failed:', errorMsg);
-						new Notice(`S3 upload failed: ${errorMsg}`);
-						return null;
-					}
+					return this.parseS3Response(response);
 				}
 
 				case 'server_local': {
-					// Local upload: use multipart/form-data with file upload
-					const endpointUrl = `${this.settings?.apiServer}/images/transform_download`;
-
-					// Create FormData for local uploads (multipart/form-data with file upload)
+					const endpointUrl = `${apiServer}/images/transform_download`;
 					const formData = new FormData();
-					formData.append('image', blob, 'image.png'); // Attach blob as file
+					formData.append('image', blob, 'image.png');
 					formData.append('format_to', imageFormat);
-					formData.append('quality', (this.settings?.compressionLevel || defaultCompressionLevel).toString());
+					formData.append('quality', compressionLevel.toString());
 
-					// Make the HTTP POST request using axios with FormData
 					const response = await axios.post(endpointUrl, formData, {
-						headers: {
-							'Content-Type': 'multipart/form-data',
-						},
-						responseType: 'arraybuffer', // Response will be binary image data
+						headers: { 'Content-Type': 'multipart/form-data' },
+						responseType: 'arraybuffer',
 					});
 
-					// For local storage, response should be binary image data directly
-					try {
-						// Use response data directly as ArrayBuffer (binary image data)
-						const imageBuffer = response.data as ArrayBuffer;
-
-						const fileExtension = imageFormat === 'jpeg' ? 'jpg' : imageFormat;
-						const randomFilename = tUtils.randomFilename(fileExtension);
-
-						const filePath = await this.app.fileManager.getAvailablePathForAttachment(randomFilename);
-						const file = await this.app.vault.createBinary(filePath, imageBuffer);
-
-						return file.path;
-					} catch (parseError) {
-						console.error('Failed to save binary response:', parseError);
-						new Notice('Failed to save the processed image');
-						return null;
-					}
+					return this.saveImageToVault(response.data as ArrayBuffer, imageFormat);
 				}
 
 				case 'server_s3': {
-					// S3 upload: use multipart/form-data with JSON response
-					const endpointUrl = `${this.settings?.apiServer}/images/transform_save_s3`;
-
-					// Create S3 path
-					const local_path = path.dirname(await this.app.fileManager.getAvailablePathForAttachment('file.bin'));
-					const s3_path = `${tUtils.slugifyVaultName(this.app.vault.getName())}/${tUtils.localPathToPartialUrl(local_path)}/${tUtils.randomFilename()}`;
-
-					// Create FormData for S3 uploads (multipart/form-data with file upload)
+					const endpointUrl = `${apiServer}/images/transform_save_s3`;
+					const s3_path = await this.buildS3Path(imageFormat);
 					const formData = new FormData();
-					formData.append('image', blob, 'image.png'); // Attach blob as file
+					formData.append('image', blob, 'image.png');
 					formData.append('format_to', imageFormat);
-					formData.append('quality', (this.settings?.compressionLevel || defaultCompressionLevel).toString());
+					formData.append('quality', compressionLevel.toString());
 					formData.append('s3_path', s3_path);
 
-					// Make the HTTP POST request using axios with FormData
 					const response = await axios.post(endpointUrl, formData, {
-						headers: {
-							'Content-Type': 'multipart/form-data',
-						},
-						responseType: 'json', // Server returns JSON response for S3
+						headers: { 'Content-Type': 'multipart/form-data' },
+						responseType: 'json',
 					});
 
-					// For S3 upload, handle the JSON response
-					try {
-						const responseData = response.data as {
-							success: boolean;
-							errors?: string;
-							messages?: string;
-							result?: { url: string };
-						};
-
-						if (responseData.success === true && responseData.result?.url) {
-							// Success - return the S3 URL
-							console.log(`S3 upload successful: ${responseData.messages || 'Image uploaded'}`);
-							return responseData.result.url;
-						} else {
-							// Handle API errors
-							const errorMsg = responseData.errors || 'Unknown S3 upload error';
-							console.error('S3 upload failed:', errorMsg);
-							new Notice(`S3 upload failed: ${errorMsg}`);
-							return null;
-						}
-					} catch (parseError) {
-						console.error('Failed to parse S3 response as JSON:', parseError);
-						new Notice('Failed to parse S3 upload response');
-						return null;
-					}
+					return this.parseS3Response(response);
 				}
 
 				default:
@@ -403,7 +316,48 @@ export default class ImgWebpOptimizerPlugin extends Plugin {
 	}
 
 
+	/**
+	 * Builds an S3 object path using vault name, note path, and a random filename.
+	 */
+	private async buildS3Path(imageFormat: string): Promise<string> {
+		const local_path = path.dirname(await this.app.fileManager.getAvailablePathForAttachment('file.bin'));
+		const s3_path = `${tUtils.slugifyVaultName(this.app.vault.getName())}/${tUtils.localPathToPartialUrl(local_path)}/${tUtils.randomFilename(imageFormat === 'jpeg' ? 'jpg' : imageFormat)}`;
+		return s3_path;
+	}
 
+	/**
+	 * Saves binary image data to the Obsidian vault and returns the file path.
+	 */
+	private async saveImageToVault(arrayBuffer: ArrayBuffer, imageFormat: string): Promise<string | null> {
+		const fileExtension = imageFormat === 'jpeg' ? 'jpg' : imageFormat;
+		const randomFilename = tUtils.randomFilename(fileExtension);
+		const filePath = await this.app.fileManager.getAvailablePathForAttachment(randomFilename);
+		const file = await this.app.vault.createBinary(filePath, arrayBuffer);
+		return file.path;
+	}
+
+	/**
+	 * Parses the JSON response from an S3 upload endpoint.
+	 * Returns the S3 URL on success, or null (with Notice) on failure.
+	 */
+	private parseS3Response(response: AxiosResponse): string | null {
+		const responseData = response.data as {
+			success: boolean;
+			errors?: string;
+			messages?: string;
+			result?: { url: string };
+		};
+
+		if (responseData.success === true && responseData.result?.url) {
+			console.log(`S3 upload successful: ${responseData.messages || 'Image uploaded'}`);
+			return responseData.result.url;
+		} else {
+			const errorMsg = responseData.errors || 'Unknown S3 upload error';
+			console.error('S3 upload failed:', errorMsg);
+			new Notice(`S3 upload failed: ${errorMsg}`);
+			return null;
+		}
+	}
 
 	/**
 	 * Handles the OCR clipboard action.

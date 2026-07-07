@@ -2,7 +2,7 @@ import { App, PluginSettingTab, Setting } from "obsidian";
 import ImgWebpOptimizerPlugin from "./main";
 import { ImgOptimizerPluginSettings } from "./libs/plugin_interfaces";
 
-export const DEFAULT_SETTINGS: Partial<ImgOptimizerPluginSettings> = {
+export const DEFAULT_SETTINGS: ImgOptimizerPluginSettings = {
 	imageFormat: 'avif',
 	compressionLevel: 70,
 	apiServer: 'http://localhost:5764',
@@ -10,8 +10,11 @@ export const DEFAULT_SETTINGS: Partial<ImgOptimizerPluginSettings> = {
   };
 
 export const ConfigValues = {
-	validFormats: ["webp", "png", "avif", "jpeg"],
+	validFormats: ["webp", "png", "avif", "jpeg", "jxl"],
+	useNativeConversion: ['webp', 'jpeg', 'jpg', 'png']
 };
+
+export const formatsSupportedLabel = ConfigValues.validFormats.join('/').toUpperCase();
 
 const validFormatsOptions: Record<string, string> = Object.fromEntries(ConfigValues.validFormats.map(item => [item, item]));
 
@@ -42,7 +45,7 @@ export class ImgOptimizerPluginSettingsTab extends PluginSettingTab {
   
 		new Setting(containerEl)
 		.setName('Image format')
-		.setDesc('Accepts WEBP/AVIF/PNG/JPEG')
+		.setDesc(`accepts ${formatsSupportedLabel}`)
 		.addDropdown((text) =>
 			text
 			.addOptions(validFormatsOptions)
